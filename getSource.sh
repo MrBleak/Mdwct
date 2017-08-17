@@ -1,10 +1,14 @@
-#!bin/bash
-for file in ./*
-do
-    if test -f $file
-    then
-        echo $file 是文件
-    else
-        echo $file 是目录
-    fi
-done
+#!/bin/bash
+function getdir(){
+    for element in `ls $1`
+    do  
+        dir_or_file=$1"/"$element
+        if [ -d $dir_or_file ]
+        then 
+            getdir $dir_or_file
+        else
+            echo $dir_or_file
+        fi  
+    done
+}
+getdir . |grep "\.cp*"$ >> SourcePath
