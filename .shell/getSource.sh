@@ -11,4 +11,4 @@ function getdir(){
         fi  
     done
 }
-getdir . |grep "\.cp*"$ >> SourcePath
+getdir .. |grep "\.cp*"$ >> SourcePath
