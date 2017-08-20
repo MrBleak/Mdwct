@@ -6,11 +6,12 @@
  ************************************************************************/
 
 #include "openSource.h"
+#include"linkStack.h"
 
 int openSource()
 {
     FILE* p = NULL;
-    if (NULL == (p = fopen("./SourcePath", "r")))
+    if (NULL == (p = fopen("./SourcePathbak", "r")))
     {
         printf("open SourcePath failed\n");
         return -1;
@@ -35,14 +36,138 @@ int openSource()
 
         if(NULL == (fp = fopen(fname, "r")))
         {
-            printf("open %s failed\n", fname);
+            printf("Error:open %s failed\n", fname);
         }
         else
         {
             // 添加更改文件的實現函數:addZlog(FILE** fpS);
+            char cMacro[] = "#include \"stdio.h\"\n#define Function_entry_location_zrh printf(\"FILE:%s:FUNC:%s:LINE:%d\\n\", __FILE__, __FUNCTION__, __LINE__);\n";
+            FILE* fpTmp = NULL;
+            if (NULL == (fpTmp = fopen("Temp.zrh", "w")))
+            {
+                printf("Error:open Temp.zrh failed\n");
+                return -1;
+            }
+
+            if (EOF == fputs(cMacro, fpTmp))
+            {
+                printf("Error:MACRO failed!\n");
+            }
+
+            char d = '\n';
+            DataType e;
+            int isMacro = 0;
+            LinkStack pTopSt = NULL;
+            char addlog[] = "\n\tFunction_entry_location_zrh\n";
+            InitStack( &pTopSt );
+            while(EOF != (c = fgetc(fp)))
+            {
+                if (EOF == fputc(c, fpTmp))
+                {
+                    printf("Error:put c to fpTmp failed\n");
+                }
+                if (('\n' == d) && '#' == c)
+                {
+                    isMacro = 1;
+                }
+                d = c;
+                if ((1 == isMacro) && ('\n' == c))
+                {
+                    isMacro = 0;
+                }
+
+                if (0 == isMacro)
+                {
+                    switch (c)
+                    {
+                        case '(' :
+                            {
+                                if(0 == StackLength(pTopSt))
+                                {
+                                    PushStack(pTopSt, c);
+                                }
+                                else if(GetTop(pTopSt, &e))
+                                {
+                                    switch (e)
+                                    {
+                                        case '(' :
+                                            PushStack(pTopSt, c);
+                                            break;
+                                        case ')' :
+                                            PopStack(pTopSt, &e);
+                                            break;
+                                        default:
+                                            break;
+                                    }
+                                }
+                            }
+                            break;
+                        case ')' :
+                            {
+                                if(1 == StackLength(pTopSt))
+                                {
+                                    PushStack(pTopSt, c);
+                                }
+                                else if(1 < StackLength(pTopSt))
+                                {
+                                    PopStack(pTopSt, &e);
+                                }
+                            }
+                            break;
+                        case '{' :
+                            {
+                                if(2 == StackLength(pTopSt))
+                                {
+                                    PushStack(pTopSt, c);
+
+                                    if (EOF == fputs(addlog, fpTmp))
+                                    {
+                                        printf("Error:add log failed!\n");
+                                    }
+                                }
+                                else if(2 < StackLength(pTopSt))
+                                {
+                                    PushStack(pTopSt, c);
+                                }
+                            }
+                            break;
+                        case '}' :
+                            {
+                                if(3 < StackLength(pTopSt))
+                                {
+                                    PopStack(pTopSt, &e);
+                                }
+                                else if(3 == StackLength(pTopSt))
+                                {
+                                    PopStack(pTopSt, &e);
+                                    PopStack(pTopSt, &e);
+                                    PopStack(pTopSt, &e);
+                                }
+                            }
+                            break;
+                        default:
+                            break;
+                    }
+                }
+            }
+            fclose(fpTmp);
+            fpTmp = NULL;
             fclose(fp);
+            fp = NULL;
+#if 0
+            printf("%s\n", fname);
+            if(-1 == remove(fname))
+            {
+                printf("delete file failed\n");
+            }
+#endif
+            if(-1 == rename("./Temp.zrh", fname))
+            {
+                printf("Error:con not move file!\n");
+            }
         }
     }
     fclose(p);
+    p = NULL;
     return 0;
 }

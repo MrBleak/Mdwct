@@ -12,7 +12,7 @@ int main()
 {
     printf("Mdwct.main start\n");
     
-    system("../.shell/getSource.sh");
+    system("./getSource_bak.sh");
 
     if(-1 == openSource())
     {
