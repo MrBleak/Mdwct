@@ -82,35 +82,54 @@ int openSource()
                     {
                         case '(' :
                             {
-                                if(0 == StackLength(pTopSt))
+                                if(2 < StackLength(pTopSt))
                                 {
                                     PushStack(pTopSt, c);
                                 }
-                                else if(GetTop(pTopSt, &e))
+                                else if (2 == StackLength(pTopSt))
                                 {
-                                    switch (e)
+                                    GetTop(pTopSt, &e);
+                                    if ('(' == e)
                                     {
-                                        case '(' :
-                                            PushStack(pTopSt, c);
+                                        PushStack(pTopSt, c);
+                                    }
+                                    else if(')' == e)
+                                    {
+                                        PopStack(pTopSt, &e);
+                                    }
+                                }
+                                else
+                                {
+                                    LinkStack pTRA = pTopSt->next;
+
+                                    while (pTRA)
+                                    {
+                                        if ('(' != pTRA->data)
+                                        {
                                             break;
-                                        case ')' :
-                                            PopStack(pTopSt, &e);
-                                            break;
-                                        default:
-                                            break;
+                                        }
+                                        pTRA = pTRA->next;
+                                    }
+                                    if (!pTRA)
+                                    {
+                                        PushStack(pTopSt, c);
                                     }
                                 }
                             }
                             break;
                         case ')' :
                             {
+                                GetTop(pTopSt, &e);
                                 if(1 == StackLength(pTopSt))
                                 {
                                     PushStack(pTopSt, c);
                                 }
                                 else if(1 < StackLength(pTopSt))
                                 {
-                                    PopStack(pTopSt, &e);
+                                    if ('(' == e)
+                                    {
+                                        PopStack(pTopSt, &e);
+                                    }
                                 }
                             }
                             break;
@@ -133,15 +152,15 @@ int openSource()
                             break;
                         case '}' :
                             {
-                                if(3 < StackLength(pTopSt))
+                                GetTop(pTopSt, &e);
+                                if('{' == e)
                                 {
                                     PopStack(pTopSt, &e);
-                                }
-                                else if(3 == StackLength(pTopSt))
-                                {
-                                    PopStack(pTopSt, &e);
-                                    PopStack(pTopSt, &e);
-                                    PopStack(pTopSt, &e);
+                                    if(2 == StackLength(pTopSt))
+                                    {
+                                        PopStack(pTopSt, &e);
+                                        PopStack(pTopSt, &e);
+                                    }
                                 }
                             }
                             break;
@@ -154,6 +173,7 @@ int openSource()
             fpTmp = NULL;
             fclose(fp);
             fp = NULL;
+            DestoryStack(pTopSt);
 #if 0
             printf("%s\n", fname);
             if(-1 == remove(fname))
