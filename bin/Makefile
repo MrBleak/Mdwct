@@ -1,5 +1,5 @@
 cc = gcc
-prom = Mdwct
+prom = mdwct
 deps = $(shell find ../ -name "*.h")
 src = $(shell find ../ -name "*.c")
 obj = $(src:%.c=%.o) 
