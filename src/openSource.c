@@ -57,6 +57,8 @@ int openSource()
             char d = '\n';
             DataType e;
             int isMacro = 0;
+            int isSingleNode = 0;
+            int isMultiNodes = 0;
             LinkStack pTopSt = NULL;
             char addlog[] = "\n\tFunction_entry_location_zrh\n";
             InitStack( &pTopSt );
@@ -70,13 +72,29 @@ int openSource()
                 {
                     isMacro = 1;
                 }
-                d = c;
                 if ((1 == isMacro) && ('\n' == c))
                 {
                     isMacro = 0;
                 }
+                if (('/' == d) && ('/' == c))
+                {
+                    isSingleNode = 1;
+                }
+                if (isSingleNode && ('\n' == c))
+                {
+                    isSingleNode = 0;
+                }
+                if (('/' == d) && ('*' == c))
+                {
+                    isMultiNodes = 1;
+                }
+                if ((isMultiNodes) && (('*' == d) && ('/' == c)))
+                {
+                    isMultiNodes = 0;
+                }
+                d = c;
 
-                if (0 == isMacro)
+                if (!((isMacro) || (isMultiNodes) || (isSingleNode)))
                 {
                     switch (c)
                     {
@@ -119,10 +137,21 @@ int openSource()
                             break;
                         case ')' :
                             {
+                                if (StackEmpty(pTopSt))
+                                {
+                                    break;
+                                }
                                 GetTop(pTopSt, &e);
                                 if(1 == StackLength(pTopSt))
                                 {
                                     PushStack(pTopSt, c);
+                                    char f = fgetc(fp);
+                                    fseek(fp, -1L, SEEK_CUR);
+                                    if(';' == f)
+                                    {
+                                        PopStack(pTopSt, &e);
+                                        PopStack(pTopSt, &e);
+                                    }
                                 }
                                 else if(1 < StackLength(pTopSt))
                                 {
@@ -152,6 +181,10 @@ int openSource()
                             break;
                         case '}' :
                             {
+                                if (StackEmpty(pTopSt))
+                                {
+                                    break;
+                                }
                                 GetTop(pTopSt, &e);
                                 if('{' == e)
                                 {

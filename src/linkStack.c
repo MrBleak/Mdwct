@@ -42,7 +42,7 @@ int PopStack(LinkStack top,DataType *e){
     LStackNode *p;
     p = top->next;
     if(!p){
-         printf("栈已空\n");
+         printf("PopStack栈已空\n");
          return 0; 
     }
     top->next = p->next;
@@ -55,7 +55,7 @@ int GetTop(LinkStack top,DataType *e){
     LStackNode *p;
     p = top->next;
     if(!p){
-         printf("栈已空\n");
+         printf("GetTop栈已空\n");
          return 0; 
     }
     *e = p->data;
