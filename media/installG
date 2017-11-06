@@ -1,3 +1,0 @@
-卸载原有 gstream 和 libgstream
-/etc/apt/sources.list add 'deb http://security.ubuntu.com/ubuntu trusty-security main universe'
-http://ubuntu.mirror.cambrium.nl/ubuntu/pool/universe/g/gstreamer0.10-ffmpeg/
