@@ -1,0 +1,142 @@
+#include <alsa/asoundlib.h>
+#include "recorder.h"
+#include <pthread.h>
+#include <stdio.h>
+
+#define ALSA_PCM_NEW_HW_PARAMS_API
+
+typedef enum{
+	RECORDER_IDEL,
+	RECORDER_START,
+	RECORDER_STOP
+}t_Recorder_Statue;
+
+typedef struct{
+	snd_pcm_t* handle;
+	snd_pcm_hw_params_t* params;
+	int dir;
+	unsigned int val;
+	snd_pcm_uframes_t frames;
+	int size;
+}t_Param;
+
+static f_recordListener* send_data = NULL;
+volatile t_Recorder_Statue recordStatue= RECORDER_IDEL;
+static pthread_t ptid;
+t_Param* arg = NULL;
+
+void fthread(t_Param* _arg)
+{
+
+	snd_pcm_hw_params_get_period_size(_arg->params,  &(_arg->frames), &(_arg->dir));
+
+	_arg->size = _arg->frames * 2;
+	char *buffer = (char *)malloc(_arg->size);
+	while (RECORDER_START == recordStatue)
+	{
+		int rc = snd_pcm_readi(_arg->handle, buffer, _arg->frames);
+
+		if (rc == -EPIPE)
+		{
+			/* EPIPE means overrun */
+			fprintf(stderr, "overrun occurred/n");
+			snd_pcm_prepare(_arg->handle);
+		}
+		else if (rc < 0)
+		{
+			fprintf(stderr,	"error from read: %s/n", snd_strerror(rc));
+		}
+		else if (rc != (int)_arg->frames)
+		{
+			fprintf(stderr, "short read, read %d frames/n", rc);
+		}
+		(*send_data)(buffer, _arg->size);
+		if (RECORDER_STOP == recordStatue)
+		{
+			recordStatue = RECORDER_IDEL;
+			free(buffer);
+			buffer = NULL;
+		}
+	}
+	if (NULL != buffer)
+	{
+		recordStatue = RECORDER_IDEL;
+		free(buffer);
+		buffer = NULL;
+	}
+}
+
+void open_alsa_pcm(t_Param* _arg)
+{
+	int rc = (snd_pcm_open(&(_arg->handle), "default", SND_PCM_STREAM_CAPTURE, 0));
+	if (rc < 0)
+	{
+		fprintf(stderr, "unable to open pcm device: %s/n", snd_strerror(rc));
+		exit(1);
+	}
+}
+
+void set_pcm_params(t_Param* _arg)
+{
+	int rc;
+
+	snd_pcm_hw_params_alloca(&(_arg->params));
+	snd_pcm_hw_params_any(_arg->handle, _arg->params);
+	snd_pcm_hw_params_set_access(_arg->handle, _arg->params, SND_PCM_ACCESS_RW_INTERLEAVED);
+	snd_pcm_hw_params_set_format(_arg->handle, _arg->params, SND_PCM_FORMAT_S16_LE);
+	snd_pcm_hw_params_set_channels(_arg->handle, _arg->params, 1);
+	snd_pcm_hw_params_set_rate_near(_arg->handle, _arg->params,  &(_arg->val), &(_arg->dir));
+	snd_pcm_hw_params_set_period_size_near(_arg->handle, _arg->params, &(_arg->frames), &(_arg->dir));
+
+	rc = snd_pcm_hw_params(_arg->handle, _arg->params);
+	if (rc < 0)
+	{
+		fprintf(stderr,  "unable to set hw parameters: %s/n", snd_strerror(rc));
+		exit(1);
+	}
+}
+
+void recorder_Start()
+{
+	arg = (t_Param*)malloc(sizeof(t_Param));
+	arg->frames = 32;
+	arg->val = 16000;
+	if (RECORDER_IDEL == recordStatue)
+	{
+		open_alsa_pcm(arg);
+		set_pcm_params(arg);
+
+		int ret = pthread_create(&ptid, NULL, (void *)fthread, arg);
+		if(ret!=0)
+		{
+			printf("Create pthread error!\n");
+			exit(1);
+		}
+		recordStatue = RECORDER_START;
+	}
+	else
+	{
+		printf("Error: Recorder Starting!\n");
+	}
+}
+
+void recorder_Stop()
+{
+	if (recordStatue == recordStatue)
+	{
+		recordStatue = RECORDER_STOP;
+		pthread_join(ptid,NULL);
+		snd_pcm_drain(arg->handle);
+		snd_pcm_close(arg->handle);
+	}
+	else
+	{
+		printf("Error: Recorder don't Starting!\n");
+	}
+}
+
+void set_Recorder_Listener(f_recordListener func)
+{
+	send_data = (f_recordListener*) malloc(sizeof(f_recordListener));
+	*send_data = func;
+}
