@@ -2,7 +2,7 @@
 #define _MEDIA_H_
 
 #define bool char
-#define ture 1
+#define true 1
 #define false 0
 
 void media_init();

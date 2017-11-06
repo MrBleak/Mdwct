@@ -3,6 +3,6 @@
 
 void recorder_Start();
 void recorder_Stop();
-void set_Recorder_Listener(f_recordListener func);
+void set_Recorder_Listener(Recodrd_Listen_Func func);
 
 #endif // _RECORDER_H_

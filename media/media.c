@@ -2,6 +2,7 @@
 #include <gst/gst.h>
 #include <assert.h>
 #include <malloc.h>
+#include <stdlib.h>
 
 #include "media.h"
 
@@ -16,11 +17,11 @@ typedef enum{
 }t_Media_Statue;
 
 typedef struct{
-		bool volumChange;
-		bool playStateChange;
+		gboolean volumC;
+		gboolean playSC;
 }t_Change;
 
-volatile char* url = NULL;
+char* url = NULL;
 volatile t_Media_Statue mediaStatue = MEDIA_IDLE;
 volatile double volume;
 static pthread_t mediaThredID;
@@ -58,9 +59,9 @@ gboolean source_prepare_cb(GSource * source, gint * timeout)
 
 gboolean source_check_cb(GSource * source)
 {
-		static double m_volume = volume;
-		static t_Media_Statue m_mediaState = mediaStatue;
-		if ((m_volume - volume) > VOLUME_MIX) || ((m_volume - volume) < (-VOLUME_MIX))
+		static double m_volume;
+		static t_Media_Statue m_mediaState;
+		if (((m_volume - volume) > VOLUME_MIX) || ((m_volume - volume) < (-VOLUME_MIX)))
 		{
 				m_volume = volume;
 				change.volumC = TRUE;
@@ -85,11 +86,11 @@ gboolean source_dispatch_cb(GSource * source, GSourceFunc callback, gpointer dat
 				{
 						gst_element_set_state (pipeline, GST_STATE_PLAYING);
 				}
-				else (MEDIA_PLAY_PAUSE == mediaStatue)
+				else if(MEDIA_PLAY_PAUSE == mediaStatue)
 				{
 						gst_element_set_state (pipeline, GST_STATE_PAUSED);
 				}
-				else (MEDIA_PLAY_STOP == mediaStatue)
+				else if(MEDIA_PLAY_STOP == mediaStatue)
 				{
 						gst_element_set_state (pipeline, GST_STATE_READY);
 						g_main_loop_quit (loop);
@@ -112,6 +113,8 @@ void media_thread()
 	  assert(pipeline!=NULL);
 		GstBus* bus = gst_pipeline_get_bus (GST_PIPELINE (pipeline));
 		loop = g_main_loop_new(NULL,FALSE);
+		if (loop == NULL)
+			printf("loop == NULL");
 		guint bus_watch_id = gst_bus_add_watch (bus, bus_call, loop);
 		gst_object_unref (bus);
 
@@ -130,15 +133,16 @@ void media_thread()
 
 	  while (MEDIA_IDLE != mediaStatue)
 	  {
-		    if (url) && (MEDIA_PLAY_START != mediaStatue)
+		    if (MEDIA_PLAY_STOP == mediaStatue)
 		    {
 						g_object_set(G_OBJECT (pipeline), "volume", volume, NULL);
+						printf ("Now Playing : %s\n", url);
 			      g_object_set (G_OBJECT (pipeline), "uri", url, NULL);
 						gst_element_set_state (pipeline, GST_STATE_PLAYING);
-						free(url);
-						url = NULL;
+						mediaStatue = MEDIA_PLAY_START;
 						g_main_loop_run (loop);
 		    }
+				printf ("mediaStatue : %d\r", mediaStatue);
 	  }
 	  gst_element_set_state (pipeline, GST_STATE_NULL);
 	  gst_object_unref (GST_OBJECT (pipeline));
@@ -151,6 +155,7 @@ void media_init()
 	  if (MEDIA_IDLE == mediaStatue)
 	  {
 		    volume = VOLUME_MAX / 2;
+				mute = true;
 		    int ret = pthread_create(&mediaThredID, NULL, (void *)media_thread, NULL);
 		    if (ret!=0)
 		    {
@@ -170,7 +175,12 @@ void media_uninit()
 		if (MEDIA_IDLE != mediaStatue)
 		{
 				mediaStatue = MEDIA_IDLE;
-				pthread_join();
+				pthread_join(mediaThredID, NULL);
+				if (url)
+				{
+					free(url);
+					url = NULL;
+				}
 		}
 		else
 		{
@@ -189,7 +199,6 @@ void media_Play_Start(char* m_url)
 				}
 		    url = (char*)malloc(strlen(m_url) + 1);
 		    strcpy(url, m_url);
-				mediaStatue = MEDIA_PLAY_START;
 	  }
 	  else
 	  {

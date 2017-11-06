@@ -36,4 +36,6 @@ LOCAL_LDFLAGS := -lm \
 								 -lgobject-2.0 \
 								 -lglib-2.0
 
+#								 $(pkg-config --cflags --libs gstreamer-1.0)
+
 include $(BUILD_EXECUTABLE)
