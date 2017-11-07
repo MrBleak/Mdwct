@@ -10,18 +10,25 @@
 #include <stdbool.h>
 
 #include "lightduer_connagent.h"
-// #include "lightduer_voice.h"
+ #include "lightduer_voice.h"
 // #include "lightduer_play_event.h"
 #include "duerapp_config.h"
 #include "lightduer_dcs.h"
+#include "duerapp_recorder.h"
+
+extern pthread_t kbdThredID;
 
 static bool s_started = false;
-static pthread_t kbdThredID = NULL;
 
 void duer_app_dcs_init()
 {
 	duer_dcs_framework_init();
 	duer_dcs_voice_input_init();
+}
+
+void save_data(char* data, int size)
+{
+	duer_voice_send(data, size);
 }
 
 static void duer_event_hook(duer_event_t *event)
@@ -60,65 +67,6 @@ void duer_test_start(const char* profile)
     free((void *)data);
 }
 
-void loop()
-{
-	while (kbdThredID) {
-
-	}
-}
-
-void kbd_thread()
-{
-	switch (scanKeyboard()) {
-		case PLAY_PAUSE :
-			{
-
-			}
-			break;
-		case RECORD_START :
-			{
-
-			}
-			break;
-		case PLAY_STOP :
-			{
-
-			}
-			break;
-		case PRVIOUS_SONG :
-			{
-
-			}
-			break;
-		case NEXT_SONG :
-			{
-
-			}
-			break;
-		case VOLUME_INCR :
-			{
-
-			}
-			break;
-		case VOLUME_DECR :
-			{
-
-			}
-			break;
-		case RECONNTECT_CLOUD :
-			{
-
-			}
-			break;
-		case QUIT :
-			{
-
-			}
-			break;
-		default:
-			break;
-	}
-}
 
 int main(int argc, char* argv[])
 {
@@ -133,13 +81,22 @@ int main(int argc, char* argv[])
 
 	// Set the Duer Event Callback
 	duer_set_event_callback(duer_event_hook);
-
-	int ret = pthread_create(&kbdThredID, NULL, (void *)kbd_thread, NULL);
+	set_Recorder_Listener(save_data);
+	if (-1 == event_queue_init()) {
+		DUER_LOGE ("Create envet queue failed!");
+		return -1;
+	}
 
 	// try conntect baidu cloud
-	duer_test_start();
+	duer_test_start(argv[1]);
 
 	loop();
+	pthread_join(kbdThredID, NULL);
 
 	return 0;
+}
+
+void duer_dcs_stop_listen_handler(void){
+	recorder_Stop();
+	duer_voice_stop();
 }

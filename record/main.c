@@ -10,6 +10,7 @@ void save_data(char* data, int size)
 	{
 		return;
 	}
+	printf ("size:%d\r", size);
 	int rc = fwrite(data, 1, size, fp);
 	if (rc != size)
 	{

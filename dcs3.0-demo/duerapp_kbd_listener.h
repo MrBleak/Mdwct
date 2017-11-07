@@ -11,7 +11,7 @@
 typedef enum{
 	PLAY_PAUSE = 'w',
 	RECORD_START = ' ',
-	PLAY_STOP = 's'
+	PLAY_STOP = 's',
 	PRVIOUS_SONG = 'a',
 	NEXT_SONG = 'd',
 	VOLUME_INCR = '-',

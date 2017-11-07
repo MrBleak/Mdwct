@@ -19,7 +19,7 @@
 typedef enum{
 		MEDIA_IDLE,
 		MEDIA_PLAY_START,
-	  MEDIA_PLAY_PAUSE,
+		MEDIA_PLAY_PAUSE,
 		MEDIA_PLAY_STOP
 }t_Media_Statue;
 
@@ -144,7 +144,7 @@ void media_thread()
 
 		g_object_set(G_OBJECT (pipeline), "volume", volume, NULL);
 		// printf ("Now Playing : %s\n", url);
-    // g_object_set (G_OBJECT (pipeline), "uri", url, NULL);
+		// g_object_set (G_OBJECT (pipeline), "uri", url, NULL);
 		// gst_element_set_state (pipeline, GST_STATE_PLAYING);
 		// mediaStatue = MEDIA_PLAY_START;
 		g_main_loop_run (loop);
