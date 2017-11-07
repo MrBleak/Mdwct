@@ -10,8 +10,7 @@
 
 #include "duerapp_kbd_listener.h"
 
-int scanKeyboard()
-{
+int scanKeyboard() {
 	int in;
 	struct termios new_settings;
 	struct termios stored_settings;

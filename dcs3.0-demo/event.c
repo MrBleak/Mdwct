@@ -4,6 +4,10 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include "duerapp_config.h"
+#include "duerapp_recorder.h"
+#include "lightduer_dcs.h"
+#include "lightduer_voice.h"
+#include "duerapp_media.h"
 
 static LinkQueue* event_Queue = NULL;
 pthread_t kbdThredID;
@@ -11,12 +15,22 @@ pthread_t kbdThredID;
 void event_Play_Puase()
 {
 	printf ("event_Play_Puase\n");
+	static bool tmp = false;
+	if (tmp) {
+		media_Play_Pause();
+		duer_dcs_send_play_control_cmd(DCS_PLAY_CMD);
+	} else {
+		media_Play_Pause();
+		duer_dcs_send_play_control_cmd(DCS_PAUSE_CMD);
+	}
+
 }
 
 void event_Record_Start()
 {
 	DUER_LOGI ("event_Record_Start\n");
-	duer_voice_start();
+	duer_voice_start(16000);
+	duer_increase_topic_id();
 	recorder_Start();
 	if (DUER_OK != duer_dcs_on_listen_started())
 	{
@@ -32,21 +46,28 @@ void event_Play_Stop()
 void event_Prvious_Song()
 {
 	DUER_LOGI ("event_Prvious_Song\n");
+	duer_dcs_send_play_control_cmd(DCS_PREVIOUS_CMD);
 }
 
-void event_Next_Puase()
+void event_Next_Song()
 {
 	DUER_LOGI ("event_Next_Puase\n");
+	duer_dcs_send_play_control_cmd(DCS_NEXT_CMD);
 }
 
-void event_Volume_Incr()
-{
-	DUER_LOGI ("event_Volume_Incr\n");
+void event_Volume_Incr() {
+	media_Volume_Change(0.5);
+
+	if (DUER_OK == duer_dcs_on_volume_changed()) {
+		DUER_LOGI ("repot volume change OK");
+	}
 }
 
-void event_Volume_Decr()
-{
-	DUER_LOGI ("event_Volume_Decr\n");
+void event_Volume_Decr() {
+	media_Volume_Change(-0.5);
+	if (DUER_OK == duer_dcs_on_volume_changed()) {
+		DUER_LOGI ("repot volume change OK");
+	}
 }
 
 void event_Reconntect_Cloud() {
@@ -55,8 +76,19 @@ void event_Reconntect_Cloud() {
 }
 
 void event_Quit() {
-	printf ("event_Quit\n");
+	DUER_LOGI ("event_Quit\n");
 	pthread_cancel(kbdThredID);
+}
+
+void event_Volune_Mute() {
+	static bool mute = false;
+	if (mute) {
+		mute = false;
+	} else {
+		mute = true;
+	}
+	media_Set_Mute(mute);
+	duer_dcs_on_mute();
 }
 
 int event_queue_init()
@@ -93,7 +125,7 @@ void kbd_thread(LinkQueue* param)
 				duer_queue_Push(param, event_Prvious_Song);
 				break;
 			case NEXT_SONG :
-				duer_queue_Push(param, event_Next_Puase);
+				duer_queue_Push(param, event_Next_Song);
 				break;
 			case VOLUME_INCR :
 				duer_queue_Push(param, event_Volume_Incr);
@@ -106,6 +138,9 @@ void kbd_thread(LinkQueue* param)
 				break;
 			case QUIT :
 				duer_queue_Push(param, event_Quit);
+				break;
+			case VOLUME_MUTE :
+				duer_queue_Push(param, event_Volune_Mute);
 				break;
 			default:
 				break;

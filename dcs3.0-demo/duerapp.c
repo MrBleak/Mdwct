@@ -6,27 +6,47 @@
  */
 
 #include <string.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <stdbool.h>
 
 #include "lightduer_connagent.h"
- #include "lightduer_voice.h"
+#include "lightduer_voice.h"
 // #include "lightduer_play_event.h"
 #include "duerapp_config.h"
 #include "lightduer_dcs.h"
 #include "duerapp_recorder.h"
+#include "duerapp_media.h"
+#include "event.h"
 
 extern pthread_t kbdThredID;
 
+typedef enum{
+	SPEECH,
+	AUDIO
+}t_Play;
+
 static bool s_started = false;
+static t_Play s_play;
+
+void play_end() {
+	if (SPEECH == s_play) {
+		duer_dcs_speech_on_finished();
+	} else if (AUDIO == s_play) {
+		duer_dcs_audio_on_finished();
+	}
+}
 
 void duer_app_dcs_init()
 {
 	duer_dcs_framework_init();
 	duer_dcs_voice_input_init();
+	duer_dcs_voice_output_init();
+	duer_dcs_speaker_control_init();
+	duer_dcs_audio_player_init();
 }
 
-void save_data(char* data, int size)
+void send_speech_data(char* data, int size)
 {
 	duer_voice_send(data, size);
 }
@@ -46,13 +66,13 @@ static void duer_event_hook(duer_event_t *event)
 			}
       break;
     case DUER_EVENT_STOPPED:
-        s_started = false;
-        break;
+      s_started = false;
+      break;
     }
 }
 
 void duer_test_start(const char* profile)
-{``
+{
     const char *data = duer_load_profile(profile);
     if (data == NULL) {
         DUER_LOGE("load profile failed!");
@@ -72,7 +92,7 @@ int main(int argc, char* argv[])
 {
 	/* Check input arguments */
 	if (argc != 2) {
-		pfintf ("Usage: %s <profile>\n", argv[0]);
+		printf ("Usage: %s <profile>\n", argv[0]);
 		return -1;
 	}
 
@@ -81,7 +101,8 @@ int main(int argc, char* argv[])
 
 	// Set the Duer Event Callback
 	duer_set_event_callback(duer_event_hook);
-	set_Recorder_Listener(save_data);
+	set_Recorder_Listener(send_speech_data);
+	set_Play_Stop_Listener(play_end);
 	if (-1 == event_queue_init()) {
 		DUER_LOGE ("Create envet queue failed!");
 		return -1;
@@ -89,6 +110,7 @@ int main(int argc, char* argv[])
 
 	// try conntect baidu cloud
 	duer_test_start(argv[1]);
+	media_init();
 
 	loop();
 	pthread_join(kbdThredID, NULL);
@@ -96,7 +118,47 @@ int main(int argc, char* argv[])
 	return 0;
 }
 
-void duer_dcs_stop_listen_handler(void){
+void duer_dcs_stop_listen_handler(void) {
 	recorder_Stop();
 	duer_voice_stop();
+}
+
+void duer_dcs_speak_handler(const char *url) {
+	media_Play_Start(url);
+	s_play = SPEECH;
+}
+
+void duer_dcs_audio_play_handler(const char *url) {
+	media_Play_Start(url);
+	s_play = AUDIO;
+}
+
+void duer_dcs_get_speaker_state(int *volume, bool *is_mute) {
+	volume = (int)(media_Get_Volume() * 10);
+	is_mute = media_Get_Mute();
+}
+
+void duer_dcs_volume_set_handler(int volume) {
+	media_Set_Volume(volume / 10.0);
+}
+
+void duer_dcs_volume_adjust_handler(int volume) {
+	media_Volume_Change(volume / 10.0);
+}
+
+void duer_dcs_mute_handler(bool is_mute) {
+	media_Set_Mute(is_mute);
+}
+
+void duer_dcs_audio_stop_handler(void) {
+	media_Play_Stop();
+}
+
+void duer_dcs_audio_seek_handler(const char* url, int offset) {
+	media_Play_Seek(url, offset);
+	s_play = AUDIO;
+}
+
+int duer_dcs_audio_pause_handler(void){
+
 }

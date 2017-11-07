@@ -16,6 +16,7 @@ typedef enum{
 	NEXT_SONG = 'd',
 	VOLUME_INCR = '-',
 	VOLUME_DECR = '=',
+	VOLUME_MUTE = 'z',
 	RECONNTECT_CLOUD = 'e',
 	QUIT = 'q',
 }t_KBD_Event;
