@@ -1,9 +1,17 @@
+// Copyright (2017) Baidu Inc. All rights reserveed.
+/**
+ * File: duerapp_media.c
+ * Auth:
+ * Desc: Duer Configuration.
+ */
+
 #include <string.h>
 #include <gst/gst.h>
 #include <assert.h>
-#include <malloc.h>
+#include <stdlib.h>
 
-#include "media.h"
+#include "duerapp_media.h"
+#include "duerapp_config.h"
 
 #define VOLUME_MAX (10.0)
 #define VOLUME_MIX (0.000001)
@@ -16,21 +24,21 @@ typedef enum{
 }t_Media_Statue;
 
 typedef struct{
-		bool volumChange;
-		bool playStateChange;
+		gboolean volumC;
+		gboolean playSC;
 }t_Change;
 
-volatile char* url = NULL;
+static char* url = NULL;
 volatile t_Media_Statue mediaStatue = MEDIA_IDLE;
-volatile double volume;
+static double volume;
 static pthread_t mediaThredID;
-static bool mute;
+static gboolean mute;
 static t_Change change = {
 		.volumC = FALSE,
 		.playSC = FALSE
 };
-GstElement* pipeline = NULL;
-GMainLoop* loop = NULL;
+static GstElement* pipeline = NULL;
+static GMainLoop* loop = NULL;
 
 static gboolean bus_call (GstBus *bus, GstMessage *msg, gpointer data)
 {
@@ -40,8 +48,8 @@ static gboolean bus_call (GstBus *bus, GstMessage *msg, gpointer data)
 		{
 				case GST_MESSAGE_EOS :
 						{
-								printf ("Info:media Play End\n");
-					      g_main_loop_quit (m_loop);
+								DUER_LOGI ("Info:media Play End\n");
+								mediaStatue = MEDIA_PLAY_STOP;
 						}
 						break;
 				default:
@@ -58,9 +66,9 @@ gboolean source_prepare_cb(GSource * source, gint * timeout)
 
 gboolean source_check_cb(GSource * source)
 {
-		static double m_volume = volume;
-		static t_Media_Statue m_mediaState = mediaStatue;
-		if ((m_volume - volume) > VOLUME_MIX) || ((m_volume - volume) < (-VOLUME_MIX))
+		static double m_volume;
+		static t_Media_Statue m_mediaState;
+		if (((m_volume - volume) > VOLUME_MIX) || ((m_volume - volume) < (-VOLUME_MIX)))
 		{
 				m_volume = volume;
 				change.volumC = TRUE;
@@ -83,15 +91,20 @@ gboolean source_dispatch_cb(GSource * source, GSourceFunc callback, gpointer dat
 		{
 				if (MEDIA_PLAY_START == mediaStatue)
 				{
+						g_object_set (G_OBJECT (pipeline), "volume", volume, NULL);
+						g_object_set (G_OBJECT (pipeline), "uri", url, NULL);
 						gst_element_set_state (pipeline, GST_STATE_PLAYING);
 				}
-				else (MEDIA_PLAY_PAUSE == mediaStatue)
+				else if(MEDIA_PLAY_PAUSE == mediaStatue)
 				{
 						gst_element_set_state (pipeline, GST_STATE_PAUSED);
 				}
-				else (MEDIA_PLAY_STOP == mediaStatue)
+				else if(MEDIA_PLAY_STOP == mediaStatue)
 				{
 						gst_element_set_state (pipeline, GST_STATE_READY);
+				}
+				else if(MEDIA_IDLE == mediaStatue)
+				{
 						g_main_loop_quit (loop);
 				}
 		}
@@ -127,21 +140,19 @@ void media_thread()
 		maincontext = g_main_loop_get_context(loop);
 		source = g_source_new(&sourcefuncs, sizeof(GSource));
 		g_source_attach(source, maincontext);
+		maincontext = NULL;
 
-	  while (MEDIA_IDLE != mediaStatue)
-	  {
-		    if (url) && (MEDIA_PLAY_START != mediaStatue)
-		    {
-						g_object_set(G_OBJECT (pipeline), "volume", volume, NULL);
-			      g_object_set (G_OBJECT (pipeline), "uri", url, NULL);
-						gst_element_set_state (pipeline, GST_STATE_PLAYING);
-						free(url);
-						url = NULL;
-						g_main_loop_run (loop);
-		    }
-	  }
+		g_object_set(G_OBJECT (pipeline), "volume", volume, NULL);
+		// printf ("Now Playing : %s\n", url);
+    // g_object_set (G_OBJECT (pipeline), "uri", url, NULL);
+		// gst_element_set_state (pipeline, GST_STATE_PLAYING);
+		// mediaStatue = MEDIA_PLAY_START;
+		g_main_loop_run (loop);
+
 	  gst_element_set_state (pipeline, GST_STATE_NULL);
 	  gst_object_unref (GST_OBJECT (pipeline));
+
+		g_source_unref(source);
 		g_source_remove (bus_watch_id);
 		g_main_loop_unref (loop);
 }
@@ -151,17 +162,18 @@ void media_init()
 	  if (MEDIA_IDLE == mediaStatue)
 	  {
 		    volume = VOLUME_MAX / 2;
+				mute = FALSE;
 		    int ret = pthread_create(&mediaThredID, NULL, (void *)media_thread, NULL);
 		    if (ret!=0)
 		    {
-			      printf("Create media pthread error!\n");
+			      DUER_LOGE ("Create media pthread error!");
 			      exit(1);
 		    }
 				mediaStatue = MEDIA_PLAY_STOP;
 	  }
 	  else
 	  {
-		    printf("Error: Media init fail! mediaStatue:%d\n", mediaStatue);
+		    DUER_LOGE ("Error: Media init fail! mediaStatue:%d", mediaStatue);
 	  }
 }
 
@@ -170,11 +182,16 @@ void media_uninit()
 		if (MEDIA_IDLE != mediaStatue)
 		{
 				mediaStatue = MEDIA_IDLE;
-				pthread_join();
+				pthread_join(mediaThredID, NULL);
+				if (url)
+				{
+					free(url);
+					url = NULL;
+				}
 		}
 		else
 		{
-				printf("Error: Media uninit fail! mediaStatue:%d\n", mediaStatue);
+				DUER_LOGE ("Error: Media uninit fail! mediaStatue:%d", mediaStatue);
 		}
 }
 
@@ -193,7 +210,7 @@ void media_Play_Start(char* m_url)
 	  }
 	  else
 	  {
-		    printf("Error: Media Starting! mediaStatue:%d\n", mediaStatue);
+		    DUER_LOGE ("Error: Media Starting! mediaStatue:%d", mediaStatue);
 	  }
 }
 
@@ -209,7 +226,7 @@ void media_Play_Pause()
 		}
 		else
 		{
-				printf("Error: Media Play Pause Fail! mediaStatue:%d\n", mediaStatue);
+				DUER_LOGE ("Error: Media Play Pause Fail! mediaStatue:%d", mediaStatue);
 		}
 }
 
@@ -225,7 +242,7 @@ void media_Play_Stop()
 		}
 		else
 		{
-				printf("Error: Media Play Stop Fail! mediaStatue:%d\n", mediaStatue);
+				DUER_LOGE ("Error: Media Play Stop Fail! mediaStatue:%d", mediaStatue);
 		}
 }
 
@@ -255,6 +272,7 @@ void media_Set_Volume(double m_volume)
 				return;
 		}
 	  volume = m_volume;
+		printf ("volume:%.2f\n", volume);
 }
 
 double media_Get_Volume()
@@ -262,7 +280,7 @@ double media_Get_Volume()
   	return volume;
 }
 
-void media_Mute(bool m_mute)
+void media_Mute(gboolean m_mute)
 {
 		static double m_volume = 0.0;
 	  mute = m_mute;

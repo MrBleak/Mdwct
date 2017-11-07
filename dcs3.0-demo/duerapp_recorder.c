@@ -1,8 +1,16 @@
+// Copyright (2017) Baidu Inc. All rights reserveed.
+/**
+ * File: duerapp_recorder.c
+ * Auth:
+ * Desc: Duer Configuration.
+ */
+
 #include <alsa/asoundlib.h>
 #include <pthread.h>
 #include <stdio.h>
 
-#include "recorder.h"
+#include "duerapp_recorder.h"
+#include "duerapp_config.h"
 
 #define ALSA_PCM_NEW_HW_PARAMS_API
 
@@ -42,16 +50,16 @@ void recorder_thread(t_Param* _arg)
 		if (rc == -EPIPE)
 		{
 			/* EPIPE means overrun */
-			fprintf(stderr, "overrun occurred/n");
+			DUER_LOGE("overrun occurred");
 			snd_pcm_prepare(_arg->handle);
 		}
 		else if (rc < 0)
 		{
-			fprintf(stderr,	"error from read: %s/n", snd_strerror(rc));
+			DUER_LOGE("error from read: %s", snd_strerror(rc));
 		}
 		else if (rc != (int)_arg->frames)
 		{
-			fprintf(stderr, "short read, read %d frames/n", rc);
+			DUER_LOGE("short read, read %d frames", rc);
 		}
 		(*send_data)(buffer, _arg->size);
 		if (RECORDER_STOP == recordStatue)
@@ -74,7 +82,7 @@ void open_alsa_pcm(t_Param* _arg)
 	int rc = (snd_pcm_open(&(_arg->handle), "default", SND_PCM_STREAM_CAPTURE, 0));
 	if (rc < 0)
 	{
-		fprintf(stderr, "unable to open pcm device: %s/n", snd_strerror(rc));
+		DUER_LOGE("unable to open pcm device: %s", snd_strerror(rc));
 		exit(1);
 	}
 }
@@ -94,7 +102,7 @@ void set_pcm_params(t_Param* _arg)
 	rc = snd_pcm_hw_params(_arg->handle, _arg->params);
 	if (rc < 0)
 	{
-		fprintf(stderr,  "unable to set hw parameters: %s/n", snd_strerror(rc));
+		DUER_LOGE("unable to set hw parameters: %s", snd_strerror(rc));
 		exit(1);
 	}
 }
@@ -112,14 +120,14 @@ void recorder_Start()
 		int ret = pthread_create(&recordThredID, NULL, (void *)recorder_thread, arg);
 		if(ret!=0)
 		{
-			printf("Create recorder pthread error!\n");
+			DUER_LOGE("Create recorder pthread error!");
 			exit(1);
 		}
 		recordStatue = RECORDER_START;
 	}
 	else
 	{
-		printf("Error: Recorder Starting!\n");
+		DUER_LOGE("Error: Recorder Starting!");
 	}
 }
 
@@ -134,7 +142,7 @@ void recorder_Stop()
 	}
 	else
 	{
-		printf("Error: Recorder don't Starting!\n");
+		DUER_LOGE("Error: Recorder don't Starting!");
 	}
 }
 

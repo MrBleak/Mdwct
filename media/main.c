@@ -1,45 +1,56 @@
-#include <stdio.h>
-//#include <malloc.h>
-#include <unistd.h>
+#include <glib.h>
 
-#include "media.h"
+#include <gst/gst.h>
 
-//#define URL_LEN_MAX (2048)
+#include <assert.h>
 
-int main()
+static gboolean cb_print_position (GstElement *pipeline)
 {
-  char* url = "http://audio.xmcdn.com/group19/M0A/6C/BB/wKgJK1f78ayTh52oAGEtCcDT_UY493.m4a";
+  gint64 pos, len;
+  GstFormat format = GST_FORMAT_TIME;
 
-  media_init();
-  media_Play_Start(url);
-  while(1);
-  {
-    sleep(1);
-    printf("volume:%.2f\r", media_Get_Volume());
+  if (gst_element_query_position (pipeline, format, &pos)
+    && gst_element_query_duration (pipeline, format, &len)) {
+    g_print ("Time: %" GST_TIME_FORMAT " / %" GST_TIME_FORMAT "\r",
+         GST_TIME_ARGS (pos), GST_TIME_ARGS (len));
   }
-  sleep(3);
-  media_Play_Pause();
-  sleep(3);
-  media_Play_Pause();
-  sleep(3);
-  media_Volume_Change(-2.0);
-  sleep(3);
-  media_Volume_Change(4.0);
-  sleep(3);
-  media_Set_Volume(2.0);
-  sleep(3);
-  media_Set_Volume(8.0);
-  sleep(3);
-  media_Mute(1);
-  sleep(3);
 
-  printf("volume:%.2f\n", media_Get_Volume());
-  sleep(3);
+  /* call me again */
+  return TRUE;
+}
 
-  media_Mute(0);
-  sleep(3);
-  media_Play_Stop();
-  sleep(3);
+int main (int argc, char *argv[])
+{
+  /* Check input arguments */
+  if (argc != 2) {
+    g_printerr ("Usage: %s <uri>\n", argv[0]);
+    return -1;
+  }
+
+  gst_init(&argc,&argv);
+  /* Set up the pipeline */
+  GstElement* pipeline = gst_element_factory_make("playbin", "play");
+  assert(pipeline!=NULL);
+  /* we set the input filename to the source element */
+  g_object_set (G_OBJECT (pipeline), "uri", argv[1], NULL);
+  /* we add a message handler */
+  //GstBus* bus = gst_pipeline_get_bus (GST_PIPELINE (pipeline));
+  GMainLoop* loop = g_main_loop_new(NULL,FALSE);
+  //guint bus_watch_id = gst_bus_add_watch (bus, bus_call, loop);
+  //gst_object_unref (bus);
+  /* Set the pipeline to "playing" state*/
+  g_print ("Now playing: %s\n", argv[1]);
+  gst_element_set_state (pipeline, GST_STATE_PLAYING);
+  /* Iterate */
+  g_timeout_add (200, (GSourceFunc) cb_print_position, pipeline);
+  g_main_loop_run (loop);
+  /* Out of the main loop, clean up nicely */
+  g_print ("Returned, stopping playback\n");
+  gst_element_set_state (pipeline, GST_STATE_NULL);
+  g_print ("Deleting pipeline\n");
+  gst_object_unref (GST_OBJECT (pipeline));
+  //g_source_remove (bus_watch_id);
+  g_main_loop_unref (loop);
 
   return 0;
 }

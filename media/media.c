@@ -1,5 +1,5 @@
 #include <string.h>
-#include <gst/gst.h>
+//#include <gst/gst.h>
 #include <assert.h>
 #include <malloc.h>
 #include <stdlib.h>
@@ -21,17 +21,17 @@ typedef struct{
 		gboolean playSC;
 }t_Change;
 
-char* url = NULL;
+static char* url = NULL;
 volatile t_Media_Statue mediaStatue = MEDIA_IDLE;
-volatile double volume;
+static double volume;
 static pthread_t mediaThredID;
-static bool mute;
+static gboolean mute;
 static t_Change change = {
 		.volumC = FALSE,
 		.playSC = FALSE
 };
-GstElement* pipeline = NULL;
-GMainLoop* loop = NULL;
+static GstElement* pipeline = NULL;
+static GMainLoop* loop = NULL;
 
 static gboolean bus_call (GstBus *bus, GstMessage *msg, gpointer data)
 {
@@ -42,7 +42,7 @@ static gboolean bus_call (GstBus *bus, GstMessage *msg, gpointer data)
 				case GST_MESSAGE_EOS :
 						{
 								printf ("Info:media Play End\n");
-					      g_main_loop_quit (m_loop);
+								mediaStatue = MEDIA_PLAY_STOP;
 						}
 						break;
 				default:
@@ -64,6 +64,7 @@ gboolean source_check_cb(GSource * source)
 		if (((m_volume - volume) > VOLUME_MIX) || ((m_volume - volume) < (-VOLUME_MIX)))
 		{
 				m_volume = volume;
+				printf("volume change\n");
 				change.volumC = TRUE;
 		}
 		if (m_mediaState != mediaStatue)
@@ -84,6 +85,8 @@ gboolean source_dispatch_cb(GSource * source, GSourceFunc callback, gpointer dat
 		{
 				if (MEDIA_PLAY_START == mediaStatue)
 				{
+						g_object_set (G_OBJECT (pipeline), "volume", volume, NULL);
+						g_object_set (G_OBJECT (pipeline), "uri", url, NULL);
 						gst_element_set_state (pipeline, GST_STATE_PLAYING);
 				}
 				else if(MEDIA_PLAY_PAUSE == mediaStatue)
@@ -93,6 +96,9 @@ gboolean source_dispatch_cb(GSource * source, GSourceFunc callback, gpointer dat
 				else if(MEDIA_PLAY_STOP == mediaStatue)
 				{
 						gst_element_set_state (pipeline, GST_STATE_READY);
+				}
+				else if(MEDIA_IDLE == mediaStatue)
+				{
 						g_main_loop_quit (loop);
 				}
 		}
@@ -113,8 +119,6 @@ void media_thread()
 	  assert(pipeline!=NULL);
 		GstBus* bus = gst_pipeline_get_bus (GST_PIPELINE (pipeline));
 		loop = g_main_loop_new(NULL,FALSE);
-		if (loop == NULL)
-			printf("loop == NULL");
 		guint bus_watch_id = gst_bus_add_watch (bus, bus_call, loop);
 		gst_object_unref (bus);
 
@@ -130,22 +134,19 @@ void media_thread()
 		maincontext = g_main_loop_get_context(loop);
 		source = g_source_new(&sourcefuncs, sizeof(GSource));
 		g_source_attach(source, maincontext);
+		maincontext = NULL;
 
-	  while (MEDIA_IDLE != mediaStatue)
-	  {
-		    if (MEDIA_PLAY_STOP == mediaStatue)
-		    {
-						g_object_set(G_OBJECT (pipeline), "volume", volume, NULL);
-						printf ("Now Playing : %s\n", url);
-			      g_object_set (G_OBJECT (pipeline), "uri", url, NULL);
-						gst_element_set_state (pipeline, GST_STATE_PLAYING);
-						mediaStatue = MEDIA_PLAY_START;
-						g_main_loop_run (loop);
-		    }
-				printf ("mediaStatue : %d\r", mediaStatue);
-	  }
+		g_object_set(G_OBJECT (pipeline), "volume", volume, NULL);
+		// printf ("Now Playing : %s\n", url);
+    // g_object_set (G_OBJECT (pipeline), "uri", url, NULL);
+		// gst_element_set_state (pipeline, GST_STATE_PLAYING);
+		// mediaStatue = MEDIA_PLAY_START;
+		g_main_loop_run (loop);
+
 	  gst_element_set_state (pipeline, GST_STATE_NULL);
 	  gst_object_unref (GST_OBJECT (pipeline));
+
+		g_source_unref(source);
 		g_source_remove (bus_watch_id);
 		g_main_loop_unref (loop);
 }
@@ -155,7 +156,7 @@ void media_init()
 	  if (MEDIA_IDLE == mediaStatue)
 	  {
 		    volume = VOLUME_MAX / 2;
-				mute = true;
+				mute = FALSE;
 		    int ret = pthread_create(&mediaThredID, NULL, (void *)media_thread, NULL);
 		    if (ret!=0)
 		    {
@@ -199,6 +200,7 @@ void media_Play_Start(char* m_url)
 				}
 		    url = (char*)malloc(strlen(m_url) + 1);
 		    strcpy(url, m_url);
+				mediaStatue = MEDIA_PLAY_START;
 	  }
 	  else
 	  {
@@ -264,6 +266,7 @@ void media_Set_Volume(double m_volume)
 				return;
 		}
 	  volume = m_volume;
+		printf ("volume:%.2f\n", volume);
 }
 
 double media_Get_Volume()
@@ -271,7 +274,7 @@ double media_Get_Volume()
   	return volume;
 }
 
-void media_Mute(bool m_mute)
+void media_Mute(gboolean m_mute)
 {
 		static double m_volume = 0.0;
 	  mute = m_mute;

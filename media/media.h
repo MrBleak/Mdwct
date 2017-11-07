@@ -1,9 +1,7 @@
 #ifndef _MEDIA_H_
 #define _MEDIA_H_
 
-#define bool char
-#define true 1
-#define false 0
+#include <gst/gst.h>
 
 void media_init();
 void media_uninit();
@@ -16,6 +14,6 @@ void media_Play_Stop();
 void media_Volume_Change(double m_volume);
 void media_Set_Volume(double m_volume);
 double media_Get_Volume();
-void media_Mute(bool mute);
+void media_Mute(gboolean mute);
 
 #endif // _MEDIA_H_
