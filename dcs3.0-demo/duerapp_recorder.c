@@ -30,7 +30,7 @@ typedef struct{
 }t_Param;
 
 static Recodrd_Listen_Func* send_data = NULL;
-volatile t_Recorder_Statue recordStatue = RECORDER_IDEL;
+static t_Recorder_Statue recordStatue = RECORDER_IDEL;
 static pthread_t recordThredID;
 static t_Param* arg = NULL;
 
@@ -95,6 +95,7 @@ void set_pcm_params(t_Param* _arg) {
 }
 
 void recorder_Start() {
+	DUER_LOGI ("\n>>>recorder_Start\n");
 	arg = (t_Param*)malloc(sizeof(t_Param));
 	arg->frames = 32;
 	arg->val = 16000;
@@ -114,6 +115,7 @@ void recorder_Start() {
 }
 
 void recorder_Stop() {
+	DUER_LOGI ("\n>>>recorder_Stop\n");
 	if (recordStatue == recordStatue)	{
 		recordStatue = RECORDER_STOP;
 		pthread_join(recordThredID,NULL);

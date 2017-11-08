@@ -5,21 +5,13 @@
  * Desc: Duer Application Main.
  */
 
-#include <pthread.h>
-#include <stdio.h>
-#include <stdlib.h>
+#include "config.h"
 
-#include "event.h"
-#include "duerapp_kbd_listener.h"
-#include "duerapp_config.h"
-#include "duerapp_recorder.h"
-#include "lightduer_dcs.h"
-#include "lightduer_voice.h"
-#include "duerapp_media.h"
+extern const char* url;
+static bool s_loop;
 
 static LinkQueue* event_Queue = NULL;
-static bool s_loop = false;
-static pthread_t kbdThredID;
+pthread_t kbdThredID;
 
 void event_Play_Puase()
 {
@@ -27,61 +19,55 @@ void event_Play_Puase()
 	static bool tmp = false;
 	if (tmp) {
 		media_Play_Pause();
-		duer_dcs_send_play_control_cmd(DCS_PLAY_CMD);
+		//duer_dcs_send_play_control_cmd(DCS_PLAY_CMD);
 	} else {
 		media_Play_Pause();
-		duer_dcs_send_play_control_cmd(DCS_PAUSE_CMD);
+		//duer_dcs_send_play_control_cmd(DCS_PAUSE_CMD);
 	}
 
 }
 
 void event_Record_Start()
 {
-	DUER_LOGI ("event_Record_Start\n");
-	duer_voice_start(16000);
-	duer_increase_topic_id();
-	recorder_Start();
-	if (DUER_OK != duer_dcs_on_listen_started())
-	{
-		DUER_LOGE ("duer_dcs_on_listen_started failed!");
-	}
+	printf ("event_Record_Start,url:%s\n", url);
+	media_Play_Start(url);
 }
 
 void event_Play_Stop()
 {
-	DUER_LOGI ("event_Play_Stop\n");
-  media_Play_Stop();
+	printf("event_Play_Stop\n");
 }
 
 void event_Prvious_Song()
 {
-	DUER_LOGI ("event_Prvious_Song\n");
-	duer_dcs_send_play_control_cmd(DCS_PREVIOUS_CMD);
+
 }
 
 void event_Next_Song()
 {
-	DUER_LOGI ("event_Next_Puase\n");
-	duer_dcs_send_play_control_cmd(DCS_NEXT_CMD);
+
 }
 
 void event_Volume_Incr() {
-	media_Volume_Change(5);
+	media_Volume_Change(0.5);
 
-	if (DUER_OK == duer_dcs_on_volume_changed()) {
-		DUER_LOGI ("repot volume change OK");
-	}
 }
 
 void event_Volume_Decr() {
-	media_Volume_Change(-5);
-	if (DUER_OK == duer_dcs_on_volume_changed()) {
-		DUER_LOGI ("repot volume change OK");
-	}
+	media_Volume_Change(-0.5);
+
 }
 
 void event_Reconntect_Cloud() {
-	media_Get_State();
+
+
+}
+
+void event_Quit() {
+	printf("event_Quit1\n");
+	pthread_exit(NULL);
+	s_loop = false;
+	printf("event_Quit2\n");
 }
 
 void event_Volune_Mute() {
@@ -92,12 +78,12 @@ void event_Volune_Mute() {
 		mute = true;
 	}
 	media_Set_Mute(mute);
-	duer_dcs_on_mute();
+
 }
 
 int event_queue_init()
 {
-  s_loop = true;
+	s_loop = true;
 	event_Queue = (LinkQueue*)malloc (sizeof(LinkQueue));
 	if (!event_Queue) {
 		goto ERR;
@@ -110,7 +96,6 @@ int event_queue_init()
 	}
 	return 0;
 ERR:
-  s_loop = false;
 	return -1;
 }
 
@@ -143,7 +128,12 @@ void kbd_thread(LinkQueue* param)
 				duer_queue_Push(param, event_Reconntect_Cloud);
 				break;
 			case QUIT :
+			{
+				printf("event_Quit1\n");
+				//pthread_exit(NULL);
 				s_loop = false;
+				printf("event_Quit2\n");
+			}
 				break;
 			case VOLUME_MUTE :
 				duer_queue_Push(param, event_Volune_Mute);
@@ -154,18 +144,19 @@ void kbd_thread(LinkQueue* param)
 	}
 }
 
-void loop()
+void event_loop()
 {
-	while (s_loop) {
-		pthread_testcancel();
+	while (1) {
 		if (!duer_queue_IsEmpty(event_Queue)) {
 			QUEUE_TYPE event = NULL;
 			duer_queue_Pop(event_Queue, &event);
 			if (event != NULL)
 			{
 				event();
+				event = NULL;
 			}
 		}
+		if (s_loop == false)
+			break;
 	}
-  pthread_join(kbdThredID, NULL);
 }

@@ -24,6 +24,6 @@ void event_Quit();
 int event_queue_init();
 void kbd_thread(LinkQueue* param);
 
-void loop();
+void event_loop();
 
 #endif // BAIDU_DUER_DUERAPP_EVENT_H

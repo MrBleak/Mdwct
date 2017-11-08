@@ -12,33 +12,15 @@
 
 #include "lightduer_connagent.h"
 #include "lightduer_voice.h"
-// #include "lightduer_play_event.h"
 #include "duerapp_config.h"
 #include "lightduer_dcs.h"
 #include "duerapp_recorder.h"
 #include "duerapp_media.h"
 #include "event.h"
 
-extern pthread_t kbdThredID;
-
-typedef enum{
-	SPEECH,
-	AUDIO
-}t_Play;
-
 static bool s_started = false;
-static t_Play s_play;
 
-void play_end() {
-	if (SPEECH == s_play) {
-		duer_dcs_speech_on_finished();
-	} else if (AUDIO == s_play) {
-		duer_dcs_audio_on_finished();
-	}
-}
-
-void duer_app_dcs_init()
-{
+void duer_app_dcs_init() {
 	duer_dcs_framework_init();
 	duer_dcs_voice_input_init();
 	duer_dcs_voice_output_init();
@@ -102,7 +84,6 @@ int main(int argc, char* argv[])
 	// Set the Duer Event Callback
 	duer_set_event_callback(duer_event_hook);
 	set_Recorder_Listener(send_speech_data);
-	set_Play_Stop_Listener(play_end);
 	if (-1 == event_queue_init()) {
 		DUER_LOGE ("Create envet queue failed!");
 		return -1;
@@ -113,7 +94,6 @@ int main(int argc, char* argv[])
 	media_init();
 
 	loop();
-	pthread_join(kbdThredID, NULL);
 
 	return 0;
 }
@@ -124,26 +104,26 @@ void duer_dcs_stop_listen_handler(void) {
 }
 
 void duer_dcs_speak_handler(const char *url) {
-	media_Play_Start(url);
-	s_play = SPEECH;
+	media_Play_Start(url, PLAY_SPEAK);
+	DUER_LOGI ("SPEAK\turl:%s", url);
 }
 
 void duer_dcs_audio_play_handler(const char *url) {
-	media_Play_Start(url);
-	s_play = AUDIO;
+	media_Play_Start(url, PLAY_AUDIO);
+	DUER_LOGI ("AUDIO\turl:%s", url);
 }
 
 void duer_dcs_get_speaker_state(int *volume, bool *is_mute) {
-	volume = (int)(media_Get_Volume() * 10);
-	is_mute = media_Get_Mute();
+	*volume = media_Get_Volume();
+	*is_mute = media_Get_Mute();
 }
 
 void duer_dcs_volume_set_handler(int volume) {
-	media_Set_Volume(volume / 10.0);
+	media_Set_Volume(volume);
 }
 
 void duer_dcs_volume_adjust_handler(int volume) {
-	media_Volume_Change(volume / 10.0);
+	media_Volume_Change(volume);
 }
 
 void duer_dcs_mute_handler(bool is_mute) {
@@ -155,8 +135,7 @@ void duer_dcs_audio_stop_handler(void) {
 }
 
 void duer_dcs_audio_seek_handler(const char* url, int offset) {
-	media_Play_Seek(url, offset);
-	s_play = AUDIO;
+	media_Play_Seek(url, offset, PLAY_AUDIO);
 }
 
 int duer_dcs_audio_pause_handler(void){

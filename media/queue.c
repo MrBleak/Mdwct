@@ -5,10 +5,7 @@
  * Desc: Duer Application Main.
  */
 
-#include <stdlib.h>
-#include <string.h>
-
-#include "queue.h"
+#include "config.h"
 
 RET duer_queue_Create(LinkQueue * que) {
 	if (!que) {
