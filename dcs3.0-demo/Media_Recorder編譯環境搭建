@@ -1,7 +1,0 @@
-gstreamer:
-# sudo apt-get install gstreamer1.0*
-
-alsa:
-# sudo apt-get install alsa-base alsa-utils libasound2-dev
-
-
