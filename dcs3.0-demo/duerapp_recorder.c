@@ -19,7 +19,7 @@ typedef enum{
 	RECORDER_IDEL,
 	RECORDER_START,
 	RECORDER_STOP
-}t_Recorder_Statue;
+}duer_rec_state_t;
 
 typedef struct{
 	snd_pcm_t* handle;
@@ -28,32 +28,32 @@ typedef struct{
 	unsigned int val;
 	snd_pcm_uframes_t frames;
 	int size;
-}t_Param;
+}duer_rec_param_t;
 
-static t_Recorder_Statue recordStatue = RECORDER_IDEL;
-static pthread_t recordThredID;
-static t_Param* arg = NULL;
+static duer_rec_state_t s_duer_rec_state = RECORDER_IDEL;
+static pthread_t s_rec_thredID;
+static duer_rec_param_t* s_arg = NULL;
 
-void recorder_thread(t_Param* _arg) {
-	snd_pcm_hw_params_get_period_size(_arg->params,  &(_arg->frames), &(_arg->dir));
+void recorder_thread(duer_rec_param_t* data) {
+	snd_pcm_hw_params_get_period_size(data->params,  &(data->frames), &(data->dir));
 
-	_arg->size = _arg->frames * 2;
-	char *buffer = (char *)malloc(_arg->size);
+	data->size = data->frames * 2;
+	char *buffer = (char *)malloc(data->size);
 	while (RECORDER_START == recordStatue) {
-		int rc = snd_pcm_readi(_arg->handle, buffer, _arg->frames);
+		int rc = snd_pcm_readi(data->handle, buffer, data->frames);
 
 		if (rc == -EPIPE) {
 			/* EPIPE means overrun */
 			DUER_LOGE("overrun occurred");
-			snd_pcm_prepare(_arg->handle);
+			snd_pcm_prepare(data->handle);
 		}
 		else if (rc < 0) {
 			DUER_LOGE("error from read: %s", snd_strerror(rc));
-		}	else if (rc != (int)_arg->frames) {
+		}	else if (rc != (int)data->frames) {
 			DUER_LOGE("short read, read %d frames", rc);
 		}
 
-		duer_voice_send(buffer, _arg->size);
+		duer_voice_send(buffer, data->size);
 
 		if (RECORDER_STOP == recordStatue) {
 			recordStatue = RECORDER_IDEL;
@@ -68,26 +68,26 @@ void recorder_thread(t_Param* _arg) {
 	}
 }
 
-void open_alsa_pcm(t_Param* _arg) {
-	int rc = (snd_pcm_open(&(_arg->handle), "default", SND_PCM_STREAM_CAPTURE, 0));
+void open_alsa_pcm(duer_rec_param_t* data) {
+	int rc = (snd_pcm_open(&(data->handle), "default", SND_PCM_STREAM_CAPTURE, 0));
 	if (rc < 0) {
 		DUER_LOGE("unable to open pcm device: %s", snd_strerror(rc));
 		exit(1);
 	}
 }
 
-void set_pcm_params(t_Param* _arg) {
+void set_pcm_params(duer_rec_param_t* data) {
 	int rc;
 
-	snd_pcm_hw_params_alloca(&(_arg->params));
-	snd_pcm_hw_params_any(_arg->handle, _arg->params);
-	snd_pcm_hw_params_set_access(_arg->handle, _arg->params, SND_PCM_ACCESS_RW_INTERLEAVED);
-	snd_pcm_hw_params_set_format(_arg->handle, _arg->params, SND_PCM_FORMAT_S16_LE);
-	snd_pcm_hw_params_set_channels(_arg->handle, _arg->params, 1);
-	snd_pcm_hw_params_set_rate_near(_arg->handle, _arg->params,  &(_arg->val), &(_arg->dir));
-	snd_pcm_hw_params_set_period_size_near(_arg->handle, _arg->params, &(_arg->frames), &(_arg->dir));
+	snd_pcm_hw_params_alloca(&(data->params));
+	snd_pcm_hw_params_any(data->handle, data->params);
+	snd_pcm_hw_params_set_access(data->handle, data->params, SND_PCM_ACCESS_RW_INTERLEAVED);
+	snd_pcm_hw_params_set_format(data->handle, data->params, SND_PCM_FORMAT_S16_LE);
+	snd_pcm_hw_params_set_channels(data->handle, data->params, 1);
+	snd_pcm_hw_params_set_rate_near(data->handle, data->params,  &(data->val), &(data->dir));
+	snd_pcm_hw_params_set_period_size_near(data->handle, data->params, &(data->frames), &(data->dir));
 
-	rc = snd_pcm_hw_params(_arg->handle, _arg->params);
+	rc = snd_pcm_hw_params(data->handle, data->params);
 	if (rc < 0) {
 		DUER_LOGE("unable to set hw parameters: %s", snd_strerror(rc));
 		exit(1);
@@ -96,14 +96,14 @@ void set_pcm_params(t_Param* _arg) {
 
 void duer_recorder_start() {
 	DUER_LOGI ("duer_recorder_start");
-	arg = (t_Param*)malloc(sizeof(t_Param));
-	arg->frames = 32;
-	arg->val = 16000;
+	s_arg = (duer_rec_param_t*)malloc (sizeof(duer_rec_param_t));
+	s_arg->frames = 32;
+	s_arg->val = 16000;
 	if (RECORDER_IDEL == recordStatue) {
-		open_alsa_pcm(arg);
-		set_pcm_params(arg);
+		open_alsa_pcm(s_arg);
+		set_pcm_params(s_arg);
 
-		int ret = pthread_create(&recordThredID, NULL, (void *)recorder_thread, arg);
+		int ret = pthread_create(&s_rec_thredID, NULL, (void *)recorder_thread, s_arg);
 		if(ret != 0) {
 			DUER_LOGE("Create recorder pthread error!");
 			exit(1);
@@ -118,9 +118,9 @@ void duer_recorder_stop() {
 	DUER_LOGI ("duer_recorder_stop");
 	if (recordStatue == recordStatue)	{
 		recordStatue = RECORDER_STOP;
-		pthread_join(recordThredID,NULL);
-		snd_pcm_drain(arg->handle);
-		snd_pcm_close(arg->handle);
+		pthread_join(s_rec_thredID,NULL);
+		snd_pcm_drain(s_arg->handle);
+		snd_pcm_close(s_arg->handle);
 	}	else {
 		DUER_LOGE("Error: Recorder don't Starting!");
 	}
