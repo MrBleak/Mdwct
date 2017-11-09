@@ -13,9 +13,8 @@
 void duer_media_init();
 void duer_media_uninit();
 
-void duer_media_play_start(const char* url, t_PalyType pType);
-void duer_media_pause();
-void duer_media_play_seek(const char* url, int offset, t_PalyType pType);
+void duer_media_play_start(const char* url, duer_play_type_t play_type);
+void duer_media_play_seek(const char* url, int offset, duer_play_type_t play_type);
 void duer_media_play_stop();
 
 void duer_media_volume_change(int volume);

@@ -21,41 +21,29 @@
 typedef enum{
 	MEDIA_IDLE,
 	MEDIA_PLAY_START,
-	MEDIA_PLAY_PAUSE,
 	MEDIA_PLAY_STOP
-}t_Media_Statue;
+}duer_media_statue_t;
 
 typedef struct{
-	gboolean volumC;
-	gboolean playSC;
-}t_Change;
+	bool vol_change;
+	bool play_change;
+}duer_media_change_t;
 
-static t_Change change = {
-	.volumC = FALSE,
-	.playSC = FALSE
+static duer_media_change_t s_change = {
+	.vol_change = FALSE,
+	.play_change = FALSE
 };
 
 static char* s_url = NULL;
-static t_Media_Statue mediaStatue = MEDIA_IDLE;
+static duer_media_statue_t s_media_statue = MEDIA_IDLE;
 static double s_volume;
 static pthread_t s_media_thredID;
 static bool s_mute;
 static GstElement* s_pipeline = NULL;
 static GMainLoop* s_loop = NULL;
 static gint64 s_pos = 0;
-static t_PalyType play_type = PLAY_IDLE;
+static duer_play_type_t s_play_type = PLAY_IDLE;
 static int s_seek = 0;
-
-#if 0
-static gboolean bus_call (GstBus *bus, GstMessage *msg, gpointer data) {
-	if (GST_MESSAGE_TYPE (msg) == GST_MESSAGE_EOS) {
-			DUER_LOGI ("\n\nInfo:media Play End\n");
-			(*play_stop)();
-			mediaStatue = MEDIA_PLAY_STOP;
-	}
-	return TRUE;
-}
-#endif
 
 gboolean source_prepare_cb(GSource * source, gint * timeout) {
 	*timeout = 200;
@@ -66,7 +54,7 @@ gboolean source_check_cb(GSource * source) {
 	gint64 position, len;
   GstFormat format = GST_FORMAT_TIME;
 
-	if ((mediaStatue == MEDIA_PLAY_START)
+	if ((s_media_statue == MEDIA_PLAY_START)
 		&& gst_element_query_duration (s_pipeline, format, &len)
 		&& (gst_element_query_position (s_pipeline, format, &position))) {
 
@@ -74,39 +62,46 @@ gboolean source_check_cb(GSource * source) {
 			GST_TIME_ARGS (position), GST_TIME_ARGS (len));
 		if (position <= s_pos)	{
 			DUER_LOGI ("media play end");
-			mediaStatue = MEDIA_PLAY_STOP;
+			s_media_statue = MEDIA_PLAY_STOP;
 			s_pos = 0;
+			if (PLAY_SPEAK == s_play_type) {
+				DUER_LOGV ("PLAY_SPEAK : play end");
+				duer_dcs_speech_on_finished();
+			} else if (PLAY_AUDIO == s_play_type) {
+				DUER_LOGV ("PLAY_AUDIO : play end");
+				duer_dcs_audio_on_finished();
+			}
 		}	else {
 			s_pos = position;
 		}
   }
 	static double vol;
-	static t_Media_Statue m_mediaState;
+	static duer_media_statue_t save_state;
 
 	if (((vol - s_volume) > VOLUME_MIX)
 		|| ((vol - s_volume) < (-VOLUME_MIX))) {
 		vol = s_volume;
-		change.volumC = TRUE;
+		s_change.vol_change = TRUE;
 	}
 
-	if (m_mediaState != mediaStatue) {
-		m_mediaState = mediaStatue;
-		change.playSC = TRUE;
+	if (save_state != s_media_statue) {
+		save_state = s_media_statue;
+		s_change.play_change = TRUE;
 	}
 
-	return (change.volumC || change.playSC);
+	return (s_change.vol_change || s_change.play_change);
 }
 
 gboolean source_dispatch_cb(GSource * source,
 							GSourceFunc callback,
 							gpointer data) {
-	if (change.volumC) {
+	if (s_change.vol_change) {
 		g_object_set(G_OBJECT (s_pipeline), "volume", s_volume, NULL);
-		change.volumC = FALSE;
+		s_change.vol_change = FALSE;
 	}
 
-	if (change.playSC) {
-		if (MEDIA_PLAY_START == mediaStatue) {
+	if (s_change.play_change) {
+		if (MEDIA_PLAY_START == s_media_statue) {
 			if (0 != s_seek) {
 				gst_element_seek_simple(s_pipeline, GST_FORMAT_TIME,
 					GST_SEEK_FLAG_FLUSH | GST_SEEK_FLAG_KEY_UNIT,
@@ -116,24 +111,15 @@ gboolean source_dispatch_cb(GSource * source,
 			g_object_set (G_OBJECT (s_pipeline), "volume", s_volume, NULL);
 			g_object_set (G_OBJECT (s_pipeline), "uri", s_url, NULL);
 			gst_element_set_state (s_pipeline, GST_STATE_PLAYING);
-			DUER_LOGI ("media state change : %s", s_url);
-		} else if(MEDIA_PLAY_PAUSE == mediaStatue) {
-			gst_element_set_state (s_pipeline, GST_STATE_PAUSED);
-		} else if(MEDIA_PLAY_STOP == mediaStatue)	{
-			DUER_LOGI ("play end : %d", play_type);
+			DUER_LOGI ("media state s_change : %s", s_url);
+		} else if(MEDIA_PLAY_STOP == s_media_statue)	{
+			DUER_LOGI ("play end : %d", s_play_type);
 			gst_element_set_state (s_pipeline, GST_STATE_READY);
-			if (PLAY_SPEAK == play_type) {
-				DUER_LOGV ("PLAY_SPEAK : play end");
-				duer_dcs_speech_on_finished();
-			} else if (PLAY_AUDIO == play_type) {
-				DUER_LOGV ("PLAY_AUDIO : play end");
-				duer_dcs_audio_on_finished();
-			}
-			play_type = PLAY_IDLE;
-		}	else if(MEDIA_IDLE == mediaStatue) {
+			s_play_type = PLAY_IDLE;
+		}	else if(MEDIA_IDLE == s_media_statue) {
 			g_main_loop_quit (s_loop);
 		}
-		change.playSC = FALSE;
+		s_change.play_change = FALSE;
 	}
 	return TRUE;
 }
@@ -173,7 +159,7 @@ void media_thread()
 
 void duer_media_init()
 {
-  if (MEDIA_IDLE == mediaStatue) {
+  if (MEDIA_IDLE == s_media_statue) {
     s_volume = VOLUME_MAX / 5;
 		s_mute = false;
     int ret = pthread_create(&s_media_thredID, NULL, (void *)media_thread, NULL);
@@ -181,76 +167,68 @@ void duer_media_init()
       DUER_LOGE ("Create media pthread error!");
       exit(1);
     }
-		mediaStatue = MEDIA_PLAY_STOP;
+		s_media_statue = MEDIA_PLAY_STOP;
   } else {
-    DUER_LOGE ("Error: Media init fail! mediaStatue:%d", mediaStatue);
+    DUER_LOGE ("Error: Media init fail! s_media_statue:%d", s_media_statue);
   }
 }
 
 void duer_media_uninit()
 {
-	if (MEDIA_IDLE != mediaStatue) {
-		mediaStatue = MEDIA_IDLE;
+	if (MEDIA_IDLE != s_media_statue) {
+		s_media_statue = MEDIA_IDLE;
 		pthread_join(s_media_thredID, NULL);
 		if (s_url) {
 			free(s_url);
 			s_url = NULL;
 		}
 	} else {
-		DUER_LOGE ("Error: Media uninit fail! mediaStatue:%d", mediaStatue);
+		DUER_LOGE ("Error: Media uninit fail! s_media_statue:%d", s_media_statue);
 	}
 }
 
-void duer_media_play_start(const char* url, t_PalyType pType)
+void duer_media_play_start(const char* url, duer_play_type_t play_type)
 {
 	DUER_LOGV ("duer_media_play_start : %s", url);
-  if (MEDIA_PLAY_STOP == mediaStatue) {
+  if (MEDIA_PLAY_STOP == s_media_statue) {
 		if (s_url) {
 			free(s_url);
 			s_url = NULL;
 		}
     s_url = (char*)malloc(strlen(url) + 1);
     strcpy(s_url, url);
-		play_type = pType;
-		mediaStatue = MEDIA_PLAY_START;
+		s_play_type = play_type;
+		s_media_statue = MEDIA_PLAY_START;
   } else {
-    DUER_LOGE ("Error: Media Starting! mediaStatue:%d", mediaStatue);
+    DUER_LOGE ("Error: Media Starting! s_media_statue:%d", s_media_statue);
   }
 }
 
-void duer_media_pause()
-{
-	if (MEDIA_PLAY_START == mediaStatue) {
-		mediaStatue = MEDIA_PLAY_PAUSE;
-	} else {
-		DUER_LOGE ("Error: Media Play Pause Fail! mediaStatue:%d", mediaStatue);
-	}
-}
-
-void duer_media_play_seek(const char* url, int offset, t_PalyType pType)
+void duer_media_play_seek(const char* url,
+			int offset,
+			duer_play_type_t play_type)
 {
 	DUER_LOGV ("media_play_seek : %s", url);
-	if (MEDIA_PLAY_STOP == mediaStatue) {
+	if (MEDIA_PLAY_STOP == s_media_statue) {
 		if (s_url) {
 			free(s_url);
 			s_url = NULL;
 		}
 		s_url = (char*)malloc (strlen(url) + 1);
 		strcpy(s_url, url);
-		play_type = pType;
+		s_play_type = play_type;
 		s_seek = offset;
 	} else {
-		DUER_LOGE ("Error: Media Starting! mediaStatue:%d", mediaStatue);
+		DUER_LOGE ("Error: Media Starting! s_media_statue:%d", s_media_statue);
 	}
 }
 
 void duer_media_play_stop()
 {
-	if ((MEDIA_PLAY_START == mediaStatue)
-		|| (MEDIA_PLAY_PAUSE == mediaStatue)) {
-		mediaStatue = MEDIA_PLAY_STOP;
+	if (MEDIA_PLAY_START == s_media_statue) {
+		s_media_statue = MEDIA_PLAY_STOP;
 	} else {
-		DUER_LOGE ("Error: Media Play Stop Fail! mediaStatue:%d", mediaStatue);
+		DUER_LOGE ("Error: Media Play Stop Fail! s_media_statue:%d", s_media_statue);
 	}
 }
 

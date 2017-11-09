@@ -17,10 +17,10 @@
  */
 
 typedef enum{
-	PLAY_IDLE,
-	PLAY_SPEAK,
-	PLAY_AUDIO
-}t_PalyType;
+    PLAY_IDLE,
+    PLAY_SPEAK,
+    PLAY_AUDIO
+}duer_play_type_t;
 
 const char *duer_load_profile(const char *path);
 

@@ -8,6 +8,7 @@
 #include <alsa/asoundlib.h>
 #include <pthread.h>
 #include <stdio.h>
+#include <unistd.h>
 
 #include "duerapp_recorder.h"
 #include "duerapp_config.h"
@@ -16,6 +17,7 @@
 #define ALSA_PCM_NEW_HW_PARAMS_API
 
 typedef enum{
+	RECORDER_UNINIT,
 	RECORDER_IDEL,
 	RECORDER_START,
 	RECORDER_STOP
@@ -28,100 +30,130 @@ typedef struct{
 	unsigned int val;
 	snd_pcm_uframes_t frames;
 	int size;
-}duer_rec_param_t;
+}duer_rec_config_t;
 
-static duer_rec_state_t s_duer_rec_state = RECORDER_IDEL;
+static duer_rec_state_t s_duer_rec_state = RECORDER_UNINIT;
 static pthread_t s_rec_thredID;
-static duer_rec_param_t* s_arg = NULL;
+static duer_rec_config_t* s_index = NULL;
 
-void recorder_thread(duer_rec_param_t* data) {
-	snd_pcm_hw_params_get_period_size(data->params,  &(data->frames), &(data->dir));
-
-	data->size = data->frames * 2;
-	char *buffer = (char *)malloc(data->size);
-	while (RECORDER_START == recordStatue) {
-		int rc = snd_pcm_readi(data->handle, buffer, data->frames);
-
-		if (rc == -EPIPE) {
-			/* EPIPE means overrun */
-			DUER_LOGE("overrun occurred");
-			snd_pcm_prepare(data->handle);
-		}
-		else if (rc < 0) {
-			DUER_LOGE("error from read: %s", snd_strerror(rc));
-		}	else if (rc != (int)data->frames) {
-			DUER_LOGE("short read, read %d frames", rc);
-		}
-
-		duer_voice_send(buffer, data->size);
-
-		if (RECORDER_STOP == recordStatue) {
-			recordStatue = RECORDER_IDEL;
-			free(buffer);
-			buffer = NULL;
-		}
-	}
-	if (NULL != buffer) {
-		recordStatue = RECORDER_IDEL;
-		free(buffer);
-		buffer = NULL;
-	}
-}
-
-void open_alsa_pcm(duer_rec_param_t* data) {
-	int rc = (snd_pcm_open(&(data->handle), "default", SND_PCM_STREAM_CAPTURE, 0));
-	if (rc < 0) {
-		DUER_LOGE("unable to open pcm device: %s", snd_strerror(rc));
+void duer_open_alsa_pcm()
+{
+	int ret = (snd_pcm_open(&(s_index->handle), "default", SND_PCM_STREAM_CAPTURE, 0));
+	if (ret < 0) {
+		DUER_LOGE("unable to open pcm device: %s", snd_strerror(ret));
 		exit(1);
 	}
 }
 
-void set_pcm_params(duer_rec_param_t* data) {
-	int rc;
+void duer_set_pcm_params()
+{
+	int ret;
+	s_index->frames = 32;
+	s_index->val = 16000;
+	snd_pcm_hw_params_alloca(&(s_index->params));
+	snd_pcm_hw_params_any(s_index->handle, s_index->params);
+	snd_pcm_hw_params_set_access(s_index->handle, s_index->params, SND_PCM_ACCESS_RW_INTERLEAVED);
+	snd_pcm_hw_params_set_format(s_index->handle, s_index->params, SND_PCM_FORMAT_S16_LE);
+	snd_pcm_hw_params_set_channels(s_index->handle, s_index->params, 1);
+	snd_pcm_hw_params_set_rate_near(s_index->handle, s_index->params,  &(s_index->val), &(s_index->dir));
+	snd_pcm_hw_params_set_period_size_near(s_index->handle, s_index->params, &(s_index->frames), &(s_index->dir));
 
-	snd_pcm_hw_params_alloca(&(data->params));
-	snd_pcm_hw_params_any(data->handle, data->params);
-	snd_pcm_hw_params_set_access(data->handle, data->params, SND_PCM_ACCESS_RW_INTERLEAVED);
-	snd_pcm_hw_params_set_format(data->handle, data->params, SND_PCM_FORMAT_S16_LE);
-	snd_pcm_hw_params_set_channels(data->handle, data->params, 1);
-	snd_pcm_hw_params_set_rate_near(data->handle, data->params,  &(data->val), &(data->dir));
-	snd_pcm_hw_params_set_period_size_near(data->handle, data->params, &(data->frames), &(data->dir));
-
-	rc = snd_pcm_hw_params(data->handle, data->params);
-	if (rc < 0) {
-		DUER_LOGE("unable to set hw parameters: %s", snd_strerror(rc));
+	ret = snd_pcm_hw_params(s_index->handle, s_index->params);
+	if (ret < 0) {
+		DUER_LOGE("unable to set hw parameters: %s", snd_strerror(ret));
 		exit(1);
+	}
+	snd_pcm_hw_params_get_period_size(s_index->params,  &(s_index->frames), &(s_index->dir));
+	s_index->size = s_index->frames * 2;
+}
+
+void recorder_thread()
+{
+	while (1) {
+		usleep(100);
+		if (RECORDER_START == s_duer_rec_state) {
+			printf ("1");
+			duer_open_alsa_pcm();
+			duer_set_pcm_params();
+			char *buffer = (char *)malloc (s_index->size);
+			if (!buffer) {
+				DUER_LOGE("malloc rec buffer failde!");
+			}
+			while (RECORDER_START == s_duer_rec_state) {
+				int ret = snd_pcm_readi(s_index->handle, buffer, s_index->frames);
+
+				if (ret == -EPIPE) {
+					/* EPIPE means overrun */
+					DUER_LOGE("overrun occurred");
+					snd_pcm_prepare(s_index->handle);
+				}	else if (ret < 0) {
+					DUER_LOGE("error from read: %s", snd_strerror(ret));
+				}	else if (ret != (int)s_index->frames) {
+					DUER_LOGE("short read, read %d frames", ret);
+				}
+
+				duer_voice_send(buffer, s_index->size);
+			}
+			if (buffer) {
+				free(buffer);
+				buffer = NULL;
+			}
+		} else if (RECORDER_STOP == s_duer_rec_state) {
+				snd_pcm_drain(s_index->handle);
+				snd_pcm_close(s_index->handle);
+				s_duer_rec_state = RECORDER_IDEL;
+		} else if (RECORDER_UNINIT == s_duer_rec_state) {
+			break;
+		} else if (RECORDER_IDEL == s_duer_rec_state) {
+			continue;
+		}
 	}
 }
 
-void duer_recorder_start() {
-	DUER_LOGI ("duer_recorder_start");
-	s_arg = (duer_rec_param_t*)malloc (sizeof(duer_rec_param_t));
-	s_arg->frames = 32;
-	s_arg->val = 16000;
-	if (RECORDER_IDEL == recordStatue) {
-		open_alsa_pcm(s_arg);
-		set_pcm_params(s_arg);
+void duer_record_init()
+{
+	DUER_LOGI ("duer_record_init");
+	s_index = (duer_rec_config_t*)malloc (sizeof(duer_rec_config_t));
 
-		int ret = pthread_create(&s_rec_thredID, NULL, (void *)recorder_thread, s_arg);
+	if ((s_index) && (RECORDER_UNINIT == s_duer_rec_state)) {
+		int ret = pthread_create(&s_rec_thredID, NULL, (void *)recorder_thread, NULL);
 		if(ret != 0) {
 			DUER_LOGE("Create recorder pthread error!");
 			exit(1);
 		}
-		recordStatue = RECORDER_START;
+		s_duer_rec_state = RECORDER_IDEL;
 	}	else {
 		DUER_LOGE("Error: Recorder Starting!");
 	}
 }
 
-void duer_recorder_stop() {
-	DUER_LOGI ("duer_recorder_stop");
-	if (recordStatue == recordStatue)	{
-		recordStatue = RECORDER_STOP;
+void duer_record_uninit()
+{
+	if (RECORDER_UNINIT != s_duer_rec_state) {
+		s_duer_rec_state = RECORDER_UNINIT;
 		pthread_join(s_rec_thredID,NULL);
-		snd_pcm_drain(s_arg->handle);
-		snd_pcm_close(s_arg->handle);
+		free(s_index);
+		s_index = NULL;
+	} else {
+		DUER_LOGE("Error: Recorder uninit failed!");
+	}
+}
+
+void duer_recorder_start()
+{
+	if (RECORDER_IDEL == s_duer_rec_state) {
+		s_duer_rec_state = RECORDER_START;
 	}	else {
-		DUER_LOGE("Error: Recorder don't Starting!");
+		DUER_LOGE("Error: Recorder don't Start!");
+	}
+}
+
+void duer_recorder_stop()
+{
+	DUER_LOGI ("duer_recorder_stop");
+	if (RECORDER_START == s_duer_rec_state)	{
+		s_duer_rec_state = RECORDER_STOP;
+	}	else {
+		DUER_LOGE("Error: Recorder don't Stop!");
 	}
 }

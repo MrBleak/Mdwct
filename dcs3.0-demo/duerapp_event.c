@@ -55,12 +55,14 @@ void event_play_stop()
 void event_previous_song()
 {
 	DUER_LOGV ("KEY_DOWN");
+	duer_media_play_stop();
 	duer_dcs_send_play_control_cmd(DCS_PREVIOUS_CMD);
 }
 
 void event_next_song()
 {
 	DUER_LOGV ("KEY_DOWN");
+	duer_media_play_stop();
 	duer_dcs_send_play_control_cmd(DCS_NEXT_CMD);
 }
 
@@ -108,7 +110,7 @@ void duer_event_loop()
 	kbd_ops.c_lflag &=~ (ICANON | ECHO);
 	tcsetattr(kbd_fd, TCSANOW, &kbd_ops);
 
-	while(1) {
+	while(loop_state) {
 		if (read(kbd_fd, &kbd_event, 1) < 0) {
 			continue;
 		}

@@ -82,6 +82,8 @@ int main(int argc, char* argv[])
 	// init media
 	duer_media_init();
 
+	// init recorder
+	duer_record_init();
 	// try conntect baidu cloud
 	duer_test_start(argv[1]);
 
@@ -93,7 +95,7 @@ int main(int argc, char* argv[])
 }
 
 void duer_dcs_stop_listen_handler(void) {
-	duer_recorder_start();
+	duer_recorder_stop();
 	duer_voice_stop();
 }
 
@@ -133,6 +135,6 @@ void duer_dcs_audio_seek_handler(const char* url, int offset) {
 }
 
 int duer_dcs_audio_pause_handler(void){
-	duer_media_pause();
+	duer_media_play_stop();
 	return duer_media_get_position();
 }
