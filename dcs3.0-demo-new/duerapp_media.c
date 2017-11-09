@@ -42,6 +42,7 @@ static bool s_mute;
 static GstElement* s_pipeline = NULL;
 static GMainLoop* s_loop = NULL;
 static gint64 s_pos = 0;
+static gint64 s_dur = 0;
 static duer_play_type_t s_play_type = PLAY_IDLE;
 static int s_seek = 0;
 
@@ -60,20 +61,7 @@ gboolean source_check_cb(GSource * source) {
 
 		g_print ("Time: %" GST_TIME_FORMAT " / %" GST_TIME_FORMAT "\r",
 			GST_TIME_ARGS (position), GST_TIME_ARGS (len));
-		if (position <= s_pos)	{
-			DUER_LOGI ("media play end");
-			s_media_statue = MEDIA_PLAY_STOP;
-			s_pos = 0;
-			if (PLAY_SPEAK == s_play_type) {
-				DUER_LOGV ("PLAY_SPEAK : play end");
-				duer_dcs_speech_on_finished();
-			} else if (PLAY_AUDIO == s_play_type) {
-				DUER_LOGV ("PLAY_AUDIO : play end");
-				duer_dcs_audio_on_finished();
-			}
-		}	else {
-			s_pos = position;
-		}
+
   }
 	static double vol;
 	static duer_media_statue_t save_state;
@@ -124,6 +112,29 @@ gboolean source_dispatch_cb(GSource * source,
 	return TRUE;
 }
 
+static gboolean bus_call_back(GstBus *bus, GstMessage *msg, gpointer use_data)
+{
+	switch (GST_MESSAGE_TYPE (msg)) {
+		case GST_MESSAGE_EOS: {
+				if (PLAY_SPEAK == s_play_type) {
+					DUER_LOGV ("PLAY_SPEAK : play end");
+					duer_dcs_speech_on_finished();
+				} else if (PLAY_AUDIO == s_play_type) {
+					DUER_LOGV ("PLAY_AUDIO : play end");
+					duer_dcs_audio_on_finished();
+				}
+				s_media_statue = MEDIA_PLAY_STOP;
+			}
+			break;
+		case GST_MESSAGE_ERROR:
+			s_media_statue = MEDIA_PLAY_STOP;
+			DUER_LOGE ("duer merdia play error");
+			break;
+		default:
+			break;
+	}
+}
+
 void media_thread()
 {
   gst_init(NULL,NULL);
@@ -144,17 +155,20 @@ void media_thread()
 	source = g_source_new(&sourcefuncs, sizeof(GSource));
 	g_source_attach(source, maincontext);
 	maincontext = NULL;
+	GstBus* bus = gst_pipeline_get_bus (GST_PIPELINE (s_pipeline));
+	guint bus_id = gst_bus_add_watch (bus, bus_call_back, NULL);
+	gst_object_unref (bus);
 
 	g_object_set(G_OBJECT (s_pipeline), "volume", s_volume, NULL);
 
 	g_main_loop_run (s_loop);
 
   gst_element_set_state (s_pipeline, GST_STATE_NULL);
-  gst_object_unref (GST_OBJECT (s_pipeline));
 
 	g_source_unref(source);
-
+	g_source_remove (bus_id);
 	g_main_loop_unref (s_loop);
+	gst_object_unref (GST_OBJECT (s_pipeline));
 }
 
 void duer_media_init()

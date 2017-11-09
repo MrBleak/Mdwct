@@ -70,7 +70,7 @@ void duer_set_pcm_params()
 void recorder_thread()
 {
 	while (1) {
-		usleep(100);
+		usleep(1);
 		if (RECORDER_START == s_duer_rec_state) {
 			printf ("1");
 			duer_open_alsa_pcm();
@@ -79,6 +79,7 @@ void recorder_thread()
 			if (!buffer) {
 				DUER_LOGE("malloc rec buffer failde!");
 			}
+			FILE *fp = fopen("a.pcm", "w");
 			while (RECORDER_START == s_duer_rec_state) {
 				int ret = snd_pcm_readi(s_index->handle, buffer, s_index->frames);
 
@@ -91,9 +92,10 @@ void recorder_thread()
 				}	else if (ret != (int)s_index->frames) {
 					DUER_LOGE("short read, read %d frames", ret);
 				}
-
+				fwrite(buffer,1, s_index->size,fp);
 				duer_voice_send(buffer, s_index->size);
 			}
+			fclose(fp);
 			if (buffer) {
 				free(buffer);
 				buffer = NULL;

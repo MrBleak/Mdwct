@@ -37,6 +37,7 @@ void event_play_puase()
 void event_record_start()
 {
 	DUER_LOGV ("KEY_DOWN");
+	duer_media_play_stop();
 	duer_voice_start(16000);
 	duer_increase_topic_id();
 	duer_recorder_start();
