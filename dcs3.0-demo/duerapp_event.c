@@ -5,7 +5,6 @@
  * Desc: Duer Application Main.
  */
 
-#include <stdio.h>
 #include <signal.h>
 #include <termios.h>
 #include <stdio.h>
@@ -24,13 +23,13 @@
 void event_play_puase()
 {
 	DUER_LOGV ("KEY_DOWN");
-	static bool play_pause = false;
+	static bool play_pause = FALSE;
 	if (play_pause) {
 		duer_dcs_send_play_control_cmd(DCS_PLAY_CMD);
-		play_pause = false;
+		play_pause = FALSE;
 	} else {
 		duer_dcs_send_play_control_cmd(DCS_PAUSE_CMD);
-		play_pause = true;
+		play_pause = TRUE;
 	}
 }
 
@@ -41,8 +40,7 @@ void event_record_start()
 	duer_voice_start(16000);
 	duer_increase_topic_id();
 	duer_recorder_start();
-	if (DUER_OK != duer_dcs_on_listen_started())
-	{
+	if (DUER_OK != duer_dcs_on_listen_started()) {
 		DUER_LOGE ("duer_dcs_on_listen_started failed!");
 	}
 }
@@ -50,7 +48,7 @@ void event_record_start()
 void event_play_stop()
 {
 	DUER_LOGV ("KEY_DOWN");
-  duer_media_play_stop();
+    duer_media_play_stop();
 }
 
 void event_previous_song()
@@ -122,9 +120,6 @@ void duer_event_loop()
 			case RECORD_START :
 				event_record_start();
 				break;
-			case PLAY_STOP :
-				event_play_stop();
-				break;
 			case PREVIOUS_SONG :
 				event_previous_song();
 				break;
@@ -150,3 +145,4 @@ void duer_event_loop()
 
 	tcsetattr(kbd_fd, TCSANOW, &kbd_bak);
 }
+

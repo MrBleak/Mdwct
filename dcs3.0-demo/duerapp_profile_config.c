@@ -6,10 +6,8 @@
  */
 
 #include <stdio.h>
-#include <stdlib.h>
 
 #include "duerapp_config.h"
-#include "lightduer_log.h"
 
 const char *duer_load_profile(const char *path)
 {

@@ -8,10 +8,33 @@
 #ifndef BAIDU_DUER_LIBDUER_DEVICE_EXAMPLES_DCS3_LINUX_DUERAPP_MEDIA_H
 #define BAIDU_DUER_LIBDUER_DEVICE_EXAMPLES_DCS3_LINUX_DUERAPP_MEDIA_H
 
+#include <gst/gst.h>
+
 #include "duerapp_config.h"
 
-void duer_media_init();
-void duer_media_uninit();
+typedef enum{
+    PLAY_IDLE,
+    PLAY_SPEAK,
+    PLAY_AUDIO
+}duer_play_type_t;
+
+typedef enum{
+	MEDIA_IDLE,
+	MEDIA_PLAY_START,
+	MEDIA_PLAY_STOP
+}duer_media_statue_t;
+
+typedef struct{
+	double vol;
+	duer_play_type_t type;
+	GstElement *pipeline;
+	GMainLoop *loop;
+	int seek;
+	bool mute;
+}duer_media_params_t;
+
+int duer_media_init();
+int duer_media_uninit();
 
 void duer_media_play_start(const char* url, duer_play_type_t play_type);
 void duer_media_play_seek(const char* url, int offset, duer_play_type_t play_type);

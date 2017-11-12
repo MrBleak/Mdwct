@@ -11,7 +11,6 @@
 enum duer_kbd_events{
 	PLAY_PAUSE    = 0x7A,  // z
 	RECORD_START  = 0x78,  // x
-	PLAY_STOP     = 0x63,  // c
 	PREVIOUS_SONG = 0x61,  // a
 	NEXT_SONG     = 0x64,  // d
 	VOLUME_INCR   = 0x77,  // w
