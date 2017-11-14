@@ -22,12 +22,13 @@ typedef enum{
 }duer_audio_state_t;
 
 void duer_media_init();
+void duer_media_uninit();
 
-void duer_media_speak_play(const char* url);
+void duer_media_speak_play(const char *url);
 void duer_media_speak_stop();
 
-void duer_media_audio_start(const char* url);
-void duer_media_audio_seek(const char* url, int offset);
+void duer_media_audio_start(const char *url);
+void duer_media_audio_seek(const char *url, int offset);
 void duer_media_audio_stop();
 void duer_media_audio_pause();
 int duer_media_audio_get_position();

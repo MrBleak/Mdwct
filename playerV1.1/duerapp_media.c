@@ -7,7 +7,6 @@
 
 #include <gst/gst.h>
 #include <assert.h>
-#include <unistd.h>
 
 #include "duerapp_media.h"
 #include "duerapp_config.h"
@@ -41,6 +40,16 @@ void duer_media_init()
 	s_vol = VOLUME_INIT;
 	s_mute = FALSE;
 	gst_init(NULL, NULL);
+	s_loop = g_main_loop_new(NULL,FALSE);
+}
+
+void duer_media_uninit()
+{
+	s_speak_state = MEDIA_SPEAK_STOP;
+	s_audio_state = MEDIA_AUDIO_STOP;
+	g_main_loop_quit(s_loop);
+	g_main_loop_unref(s_loop);
+	s_loop = NULL;
 }
 
 static gboolean bus_call(GstBus *bus, GstMessage *msg, gpointer data)
@@ -71,31 +80,32 @@ static gboolean bus_call(GstBus *bus, GstMessage *msg, gpointer data)
 
 static void speak_thread()
 {
-	// sleep(5);
 	g_object_set(G_OBJECT (s_pip_speak), "volume", s_vol, NULL);
 	GstBus *speak_bus = gst_pipeline_get_bus(GST_PIPELINE (s_pip_speak));
-	s_loop = g_main_loop_new(NULL,FALSE);
+	
 	guint speak_bus_watch_id = gst_bus_add_watch (speak_bus, bus_call, s_loop);
 	gst_object_unref(speak_bus);
 	gst_element_set_state(s_pip_speak, GST_STATE_PLAYING);
 	g_main_loop_run(s_loop);
-	sleep(1000);
 	gst_element_set_state (s_pip_speak, GST_STATE_NULL);
 
 	g_source_remove(speak_bus_watch_id);
 	gst_object_unref(GST_OBJECT (s_pip_speak));
 	s_pip_speak = NULL;
-	g_main_loop_unref(s_loop);
-	s_loop = NULL;
+
 	if (MEDIA_SPEAK_PLAY == s_speak_state) {
 		s_speak_state = MEDIA_SPEAK_STOP;
 		duer_dcs_speech_on_finished();
 	}
 }
 
-void duer_media_speak_play(const char* url)
+void duer_media_speak_play(const char *url)
 {
 	if (MEDIA_SPEAK_STOP == s_speak_state) {
+		if (s_pip_speak) {
+			gst_object_unref(GST_OBJECT (s_pip_speak));
+			s_pip_speak = NULL;
+		}
 		s_pip_speak = gst_element_factory_make("playbin", "speak");
 		assert(s_pip_speak != NULL);
 		g_object_set(G_OBJECT (s_pip_speak), "uri", url, NULL);
@@ -125,34 +135,37 @@ void audio_thread()
 {
 	g_object_set(G_OBJECT (s_pip_audio), "volume", s_vol, NULL);
 	GstBus *audio_bus = gst_pipeline_get_bus(GST_PIPELINE (s_pip_audio));
-	s_loop = g_main_loop_new(NULL,FALSE);
 	guint audio_bus_watch_id = gst_bus_add_watch (audio_bus, bus_call, s_loop);
 	gst_object_unref(audio_bus);
 	gst_element_set_state(s_pip_audio, GST_STATE_PLAYING);
 	g_main_loop_run(s_loop);
 
-	gst_element_set_state (s_pip_audio, GST_STATE_NULL);
-
 	g_source_remove(audio_bus_watch_id);
-	g_main_loop_unref(s_loop);
-	s_loop = NULL;
 
 	if (MEDIA_AUDIO_PLAY == s_audio_state) {
+		gst_element_set_state (s_pip_audio, GST_STATE_NULL);
 		gst_object_unref(GST_OBJECT (s_pip_audio));
 		s_pip_audio = NULL;
 		s_audio_state = MEDIA_AUDIO_STOP;
 		duer_dcs_audio_on_finished();
 		s_seek = 0;
 	} else if (MEDIA_AUDIO_STOP == s_audio_state) {
+		gst_element_set_state (s_pip_audio, GST_STATE_NULL);
 		gst_object_unref(GST_OBJECT (s_pip_audio));
 		s_pip_audio = NULL;
 		s_seek = 0;
+	} else if (MEDIA_AUDIO_PAUSE == s_audio_state) {
+		gst_element_set_state (s_pip_audio, GST_STATE_PAUSED);
 	}
 }
 
-void duer_media_audio_start(const char* url)
+void duer_media_audio_start(const char *url)
 {
 	if (MEDIA_AUDIO_STOP == s_audio_state) {
+		if (s_pip_audio) {
+			gst_object_unref(GST_OBJECT (s_pip_audio));
+			s_pip_audio = NULL;
+		}
 		s_pip_audio = gst_element_factory_make("playbin", "audio");
 		assert(s_pip_audio != NULL);
 		g_object_set(G_OBJECT (s_pip_audio), "uri", url, NULL);
@@ -169,7 +182,8 @@ void duer_media_audio_start(const char* url)
 
 		s_url = (char*)malloc(strlen(url) + 1);
 		if (s_url) {
-			strcpy(s_url, url);
+			memcpy(s_url, url, strlen(url));
+			s_url[strlen(url)] = '\0';
 		} else {
 			DUER_LOGE ("malloc url failed!");
 		}
@@ -184,16 +198,19 @@ void duer_media_audio_start(const char* url)
 	}
 }
 
-void duer_media_audio_seek(const char* url, int offset)
+void duer_media_audio_seek(const char *url, int offset)
 {
 	if (MEDIA_AUDIO_PAUSE == s_audio_state) {
-		if ((strcmp(s_url, url) == 0) && (offset == s_seek)) {
+		if ((strcmp(s_url, url) == 0) && (offset == s_seek) && (s_audio_state)) {
 			int ret = pthread_create(&s_audio_thredID, NULL, (void*)audio_thread, NULL);
 			if(ret != 0)
 			{
 				DUER_LOGE ("Create media audio pthread error!");
 				exit(1);
 			}
+			s_audio_state = MEDIA_AUDIO_PLAY;
+		} else {
+			duer_media_audio_start(url);
 		}
 	} else if (MEDIA_AUDIO_STOP == s_audio_state) {
 		duer_media_audio_start(url);
@@ -255,6 +272,9 @@ void duer_media_volume_change(int volume)
 		g_object_set(G_OBJECT (s_pip_audio), "volume", s_vol, NULL);
 	}
 	DUER_LOGI ("volume : %.1f", s_vol);
+	if (DUER_OK == duer_dcs_on_volume_changed()) {
+		DUER_LOGI ("volume change OK");
+	}
 }
 
 void duer_media_set_volume(int volume)
@@ -271,6 +291,9 @@ void duer_media_set_volume(int volume)
 		g_object_set(G_OBJECT (s_pip_audio), "volume", s_vol, NULL);
 	}
 	DUER_LOGI ("volume : %.1f", s_vol);
+	if (DUER_OK == duer_dcs_on_volume_changed()) {
+		DUER_LOGI ("volume change OK");
+	}
 }
 
 int duer_media_get_volume()
@@ -305,3 +328,5 @@ bool duer_media_get_mute()
 {
 	return s_mute;
 }
+
+

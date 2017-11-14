@@ -88,6 +88,8 @@ int main(int argc, char* argv[])
 
 	duer_event_loop();
 
+	duer_media_uninit();
+
 	return 0;
 }
 
@@ -95,6 +97,7 @@ void duer_dcs_stop_listen_handler(void)
 {
 	duer_recorder_stop();
 	duer_voice_stop();
+	DUER_LOGI ("Listen stop");
 }
 
 void duer_dcs_speak_handler(const char *url) 
@@ -137,11 +140,13 @@ void duer_dcs_mute_handler(bool is_mute)
 void duer_dcs_audio_stop_handler(void) 
 {
 	duer_media_audio_stop();
+	DUER_LOGI ("Audio stop");
 }
 
 void duer_dcs_audio_seek_handler(const char* url, int offset) 
 {
 	duer_media_audio_seek(url, offset);
+	DUER_LOGI ("Audio seek : %d : %s", offset, url);
 }
 
 int duer_dcs_audio_pause_handler(void)

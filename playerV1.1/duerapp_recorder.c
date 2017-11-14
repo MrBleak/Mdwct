@@ -28,6 +28,8 @@ static void recorder_thread()
 	char *buffer = (char*)malloc(s_index->size);
 	if (!buffer) {
 		DUER_LOGE("malloc buffer failed!\n");
+	} else {
+		memset(buffer, 0, s_index->size);
 	}
 	while (RECORDER_START == s_duer_rec_state)
 	{

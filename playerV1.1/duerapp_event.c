@@ -40,6 +40,7 @@ void event_record_start()
 	duer_voice_start(16000);
 	duer_increase_topic_id();
 	duer_recorder_start();
+
 	if (DUER_OK != duer_dcs_on_listen_started()) {
 		DUER_LOGE ("duer_dcs_on_listen_started failed!");
 	}
@@ -63,25 +64,18 @@ void event_volume_incr()
 {
 	DUER_LOGV ("KEY_DOWN");
 	duer_media_volume_change(VOLUME_STEP);
-
-	if (DUER_OK == duer_dcs_on_volume_changed()) {
-		DUER_LOGI ("repot volume change OK");
-	}
 }
 
 void event_volume_decr()
 {
 	DUER_LOGV ("KEY_DOWN");
 	duer_media_volume_change(-VOLUME_STEP);
-	if (DUER_OK == duer_dcs_on_volume_changed()) {
-		DUER_LOGI ("repot volume change OK");
-	}
 }
 
 void event_volune_mute()
 {
 	static bool mute = false;
-	DUER_LOGI ("KEY_DOWN : %d", mute);
+	DUER_LOGV ("KEY_DOWN : %d", mute);
 	if (mute) {
 		mute = false;
 	} else {
